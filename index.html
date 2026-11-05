@@ -78,7 +78,7 @@
   </section>
 
   <p class="note">
-    Chaque point est le score publié dans l'<b>hypothèse principale</b> d'un sondage (1<sup>er</sup>&#8239;tour) ; les listes de candidats testées varient d'un sondage à l'autre, un candidat non testé n'a pas de point à cette date. Les courbes épaisses sont des <b>tendances LOESS</b> (régression locale pondérée) calculées sur les sondages où le candidat est testé — ajustez la fenêtre pour plus ou moins de lissage. Jusqu'en juin 2026, les instituts testaient <b>Jordan Bardella</b> comme candidat du RN&#8239;; <b>Marine Le Pen</b> l'a remplacé dans les hypothèses à partir de juillet.
+    Chaque point est le score publié dans l'<b>hypothèse principale</b> d'un sondage (1<sup>er</sup>&#8239;tour) ; les listes de candidats testées varient d'un sondage à l'autre, un candidat non testé n'a pas de point à cette date. Les courbes épaisses sont des <b>tendances LOESS</b> (régression locale pondérée) calculées sur les sondages où le candidat est testé — ajustez la fenêtre pour plus ou moins de lissage. Le score affiché en bout de courbe est la <b>valeur lissée au dernier sondage</b> où le candidat a été testé. Jusqu'en juin 2026, les instituts testaient <b>Jordan Bardella</b> comme candidat du RN&#8239;; <b>Marine Le Pen</b> l'a remplacé dans les hypothèses à partir de juillet.
   </p>
 </main>
 
@@ -134,20 +134,49 @@ const PARTI = {
   "Fabien Roussel":"PCF", "Nicolas Dupont-Aignan":"DLF", "Nathalie Arthaud":"LO",
   "François Hollande":"PS", "Sarah Knafo":"Reconquête"
 };
+/* Palette usuelle des partis politiques français */
 const COULEURS = {
-  "Marine Le Pen":"#10357f", "Jordan Bardella":"#7c9bd4",
-  "Jean-Luc Mélenchon":"#d43a2f", "Édouard Philippe":"#0f8b8d",
-  "Raphaël Glucksmann":"#c2418e", "Gabriel Attal":"#e0a30c",
-  "Bruno Retailleau":"#4a5d8f", "Éric Zemmour":"#6d4c9f",
-  "Marine Tondelier":"#2e9e5b", "François Hollande":"#e56b8c",
-  "Fabien Roussel":"#a34d2e", "Sarah Knafo":"#8f6bbf",
-  "Dominique de Villepin":"#64748b", "David Lisnard":"#376f8a",
-  "François Ruffin":"#b5533c", "Nicolas Dupont-Aignan":"#4d7c5f",
-  "Nathalie Arthaud":"#8a8f3d", "Xavier Bertrand":"#57683f", "Karim Bouamrane":"#9d5b7a"
+  "Marine Le Pen":"#001e50",           // RN — bleu marine
+  "Jordan Bardella":"#7d9bc9",         // RN — teinte claire (hypothèse testée fév.-juin)
+  "Jean-Luc Mélenchon":"#d7261e",      // LFI — rouge
+  "Édouard Philippe":"#0093d0",        // Horizons — bleu
+  "Raphaël Glucksmann":"#e5007e",      // Place publique — rose
+  "Gabriel Attal":"#d4a800",           // Renaissance — jaune/doré
+  "Bruno Retailleau":"#0066cc",       // LR — bleu
+  "Éric Zemmour":"#5d4e8e",            // Reconquête — indigo
+  "Sarah Knafo":"#9b8fc9",             // Reconquête — teinte claire
+  "Marine Tondelier":"#2ba84a",        // Écologistes — vert
+  "François Hollande":"#ee6fa5",       // PS — rose
+  "Fabien Roussel":"#8f1d1d",          // PCF — rouge sombre
+  "Nicolas Dupont-Aignan":"#6baed6",  // DLF — bleu clair
+  "Nathalie Arthaud":"#7a3b2e",        // LO — rouge-brun
+  "Dominique de Villepin":"#8d99a6",  // divers — gris
+  "David Lisnard":"#16697a",           // divers droite — bleu canard
+  "François Ruffin":"#b5533c",         // gauche dissidente — rouge-brun
+  "Xavier Bertrand":"#7a8b4c",         // divers droite — olive
+  "Karim Bouamrane":"#c0567d"          // PS — teinte
 };
 const PALETTE = ["#5e548e","#885a5a","#3e7d8e","#8c7a32","#7b4f63","#4f6d46","#996f2f","#55708f"];
 const PAR_DEFAUT = new Set(["Marine Le Pen","Jean-Luc Mélenchon","Édouard Philippe",
   "Raphaël Glucksmann","Gabriel Attal","Bruno Retailleau","Jordan Bardella"]);
+
+/* Noms courts pour les étiquettes sur le graphique */
+const COURT = {
+  "Marine Le Pen":"M. Le Pen", "Jordan Bardella":"J. Bardella",
+  "Jean-Luc Mélenchon":"J.-L. Mélenchon", "Édouard Philippe":"É. Philippe",
+  "Raphaël Glucksmann":"R. Glucksmann", "Gabriel Attal":"G. Attal",
+  "Bruno Retailleau":"B. Retailleau", "Éric Zemmour":"É. Zemmour",
+  "Marine Tondelier":"M. Tondelier", "François Hollande":"F. Hollande",
+  "Fabien Roussel":"F. Roussel", "Sarah Knafo":"S. Knafo",
+  "Dominique de Villepin":"D. de Villepin", "David Lisnard":"D. Lisnard",
+  "François Ruffin":"F. Ruffin", "Nicolas Dupont-Aignan":"N. Dupont-Aignan",
+  "Nathalie Arthaud":"N. Arthaud", "Xavier Bertrand":"X. Bertrand",
+  "Karim Bouamrane":"K. Bouamrane"
+};
+const court = nom => COURT[nom] ||
+  (nom.split(" ").length > 1
+    ? nom.split(" ")[0][0] + ". " + nom.split(" ").slice(1).join(" ")
+    : nom);
 
 /* ---------------- état ---------------- */
 let DATA = null, VISIBLES = new Set(PAR_DEFAUT), FENETRE = 0.5;
@@ -223,7 +252,7 @@ function normaliser(donnees) {
 /* ---------------- rendu ---------------- */
 const svg = document.getElementById("chart");
 const NS = "http://www.w3.org/2000/svg";
-const W = 960, H = 540, PL = 46, PR = 20, PT = 14, PB = 40;
+const W = 960, H = 540, PL = 46, PR = 124, PT = 14, PB = 40;
 const x = tms => PL + (tms - TMIN) / (TMAX - TMIN) * (W - PL - PR);
 const y = v => H - PB - v / YMAX * (H - PT - PB);
 
@@ -260,7 +289,7 @@ function rendreGraphe() {
   el("text", {x: PL - 8, y: y(0) + 22, "text-anchor": "end", class: "text"}).textContent = "%";
 
   /* couches candidats : points puis courbes (les courbes au-dessus) */
-  const couches = {};
+  const couches = {}, etiquettes = [];
   for (const c of CANDIDATS) {
     if (!VISIBLES.has(c.nom)) continue;
     const pts = seriesCandidat(c.nom);
@@ -275,7 +304,23 @@ function rendreGraphe() {
       const d = courbe.map(([tms, v], i) => (i ? "L" : "M") + x(tms).toFixed(1) + " " + y(v).toFixed(1)).join("");
       el("path", {d, fill: "none", stroke: couleur, "stroke-width": 2.6,
                   "stroke-linecap": "round", "stroke-linejoin": "round"}, g);
+      /* étiquette : nom court + score lissé LOESS au dernier sondage */
+      const fin = courbe[courbe.length - 1];
+      etiquettes.push({x: x(fin[0]), y: y(fin[1]), couleur,
+                       texte: court(c.nom) + "  " + fmtPct(fin[1])});
     }
+  }
+  /* étiquettes en bout de courbe, avec anti-collision verticale */
+  etiquettes.sort((a, b) => a.y - b.y);
+  for (let i = 1; i < etiquettes.length; i++)
+    if (etiquettes[i].y - etiquettes[i - 1].y < 13)
+      etiquettes[i].y = Math.min(etiquettes[i - 1].y + 13, y(0) - 7);
+  for (const e of etiquettes) {
+    const txt = el("text", {x: e.x + 7, y: e.y + 3.5, fill: e.couleur,
+      "font-size": "11.5", "font-weight": "600",
+      stroke: "#fff", "stroke-width": "3", "stroke-linejoin": "round",
+      "paint-order": "stroke"});
+    txt.textContent = e.texte;
   }
   /* couche d'interaction (tooltip) */
   const hit = el("rect", {x: PL, y: PT, width: W - PL - PR, height: H - PT - PB, fill: "transparent"});
