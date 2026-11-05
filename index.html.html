@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Présidentielle 2027 — tous les sondages</title>
+<style>
+  :root {
+    --bg: #f7f8fa; --card: #ffffff; --ink: #16202e; --muted: #5b6b7f;
+    --line: #dfe4ea; --accent: #12376e;
+    font-family: "Marianne", "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-size: 15px; }
+  main, header, footer { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
+  header { padding-top: 28px; }
+  h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: .2px; }
+  .sous { margin: 0 0 14px; color: var(--muted); }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .chip { background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+          padding: 3px 12px; font-size: 12.5px; color: var(--muted); }
+  .chip b { color: var(--ink); font-weight: 600; }
+  .source { font-size: 12.5px; color: var(--muted); margin: 0 0 18px; }
+  .source a { color: var(--accent); }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+           padding: 16px 18px; margin-bottom: 16px; }
+  .controles { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center;
+               justify-content: space-between; }
+  .legende { display: flex; flex-wrap: wrap; gap: 6px; }
+  .legende button { display: flex; align-items: center; gap: 6px; background: none;
+                    border: 1px solid transparent; border-radius: 8px; padding: 3px 9px;
+                    cursor: pointer; font-size: 12.5px; color: var(--ink); }
+  .legende button.off { opacity: .38; }
+  .legende button:hover { border-color: var(--line); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+  .trend { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .up { color: #177245; } .down { color: #b3261e; }
+  .loess-ctl { display: flex; align-items: center; gap: 8px; font-size: 12.5px;
+               color: var(--muted); white-space: nowrap; }
+  .loess-ctl input { width: 150px; }
+  .loess-ctl b { color: var(--ink); }
+  .chartwrap { position: relative; background: var(--card); border: 1px solid var(--line);
+               border-radius: 12px; padding: 10px 8px 4px; }
+  svg { display: block; width: 100%; height: auto; }
+  #tooltip { position: absolute; pointer-events: none; background: #fff; border: 1px solid var(--line);
+             border-radius: 10px; box-shadow: 0 8px 24px rgba(22,32,46,.14);
+             padding: 10px 12px; font-size: 12.5px; min-width: 190px; display: none; z-index: 5; }
+  #tooltip h3 { margin: 0 0 6px; font-size: 12.5px; color: var(--muted); font-weight: 600; }
+  #tooltip .row { display: flex; justify-content: space-between; gap: 14px; padding: 1px 0; }
+  #tooltip .row span:last-child { font-variant-numeric: tabular-nums; }
+  .note { font-size: 12.5px; color: var(--muted); line-height: 1.55; margin: 0 0 20px; }
+  footer { padding-bottom: 34px; font-size: 12px; color: var(--muted); line-height: 1.6; }
+  footer a { color: var(--accent); }
+  .text { font-size: 11px; fill: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Présidentielle 2027 — tous les sondages</h1>
+  <p class="sous">Premier tour · intentions de vote publiées, agrégées et lissées par régression locale (LOESS)</p>
+  <div class="meta" id="meta"></div>
+  <p class="source">Source des données : <a href="https://sondax.fr" target="_blank" rel="noopener">Sondax</a>, d'après la page Wikipédia «&#8239;Liste de sondages sur l'élection présidentielle française de 2027&#8239;» — licence CC&nbsp;BY-SA&nbsp;4.0. Mise à jour hebdomadaire par <code>sondages_2027.py</code>.</p>
+</header>
+
+<main>
+  <section class="panel controles">
+    <div class="legende" id="legende"></div>
+    <label class="loess-ctl">Fenêtre LOESS
+      <input type="range" id="bw" min="0.2" max="0.8" step="0.05" value="0.5">
+      <b id="bwv">50&#8239;%</b>
+    </label>
+  </section>
+
+  <section class="chartwrap">
+    <svg id="chart" viewBox="0 0 960 540" role="img"
+         aria-label="Intentions de vote au premier tour de la présidentielle 2027, avec tendance LOESS"></svg>
+    <div id="tooltip"></div>
+  </section>
+
+  <p class="note">
+    Chaque point est le score publié dans l'<b>hypothèse principale</b> d'un sondage (1<sup>er</sup>&#8239;tour) ; les listes de candidats testées varient d'un sondage à l'autre, un candidat non testé n'a pas de point à cette date. Les courbes épaisses sont des <b>tendances LOESS</b> (régression locale pondérée) calculées sur les sondages où le candidat est testé — ajustez la fenêtre pour plus ou moins de lissage. Jusqu'en juin 2026, les instituts testaient <b>Jordan Bardella</b> comme candidat du RN&#8239;; <b>Marine Le Pen</b> l'a remplacé dans les hypothèses à partir de juillet.
+  </p>
+</main>
+
+<footer>
+  Un sondage n'est pas une prédiction&#8239;: il photographie une opinion à un instant donné, avec une marge d'erreur de ±&#8239;1 à 3 points selon la taille de l'échantillon. Les résultats doivent être interprétés avec prudence, surtout plus d'un an avant le scrutin (1<sup>er</sup>&#8239;tour&#8239;: 18 avril 2027). Notices détaillées&#8239;: <a href="https://www.commission-des-sondages.fr" target="_blank" rel="noopener">Commission des sondages</a> · Données&#8239;: <a href="https://www.data.gouv.fr/datasets/sondages-dintentions-de-vote-election-presidentielle-2027" target="_blank" rel="noopener">data.gouv.fr</a> — «&#8239;Sondax, d'après Wikipédia&#8239;», CC&nbsp;BY-SA&nbsp;4.0.
+</footer>
+
+<script>
+/* __DATA__ */
+const FALLBACK_DATA = {"updated":"2026-10-11T08:00:00+00:00","nb_polls":34,"license":"CC BY-SA 4.0 — Sondax, d'après Wikipédia","polls":[
+{"id":"ifop-2026-09-29","institut":"Ifop","date":"2026-09-29","n":1527,"scores":[["Marine Le Pen",31],["Édouard Philippe",15],["Jean-Luc Mélenchon",14],["Raphaël Glucksmann",9],["Gabriel Attal",7],["Bruno Retailleau",5],["Éric Zemmour",4],["David Lisnard",3.5],["Marine Tondelier",3],["François Ruffin",3],["Fabien Roussel",2],["Dominique de Villepin",2],["Nicolas Dupont-Aignan",1],["Nathalie Arthaud",0.5]]},
+{"id":"harris-2026-09-24","institut":"Harris","date":"2026-09-24","n":1974,"scores":[["Marine Le Pen",35],["Jean-Luc Mélenchon",17],["Édouard Philippe",13],["Raphaël Glucksmann",10],["Bruno Retailleau",7],["Gabriel Attal",5],["Éric Zemmour",5],["Marine Tondelier",3],["Fabien Roussel",2],["Nicolas Dupont-Aignan",2],["Nathalie Arthaud",1]]},
+{"id":"yougov-2026-09-21","institut":"YouGov","date":"2026-09-21","n":1103,"scores":[["Marine Le Pen",33],["Jean-Luc Mélenchon",15],["Édouard Philippe",10],["Gabriel Attal",8],["Bruno Retailleau",7],["Raphaël Glucksmann",5],["Éric Zemmour",5],["François Hollande",4],["Marine Tondelier",2],["Dominique de Villepin",2],["Nicolas Dupont-Aignan",2],["David Lisnard",2],["François Ruffin",2],["Nathalie Arthaud",1],["Fabien Roussel",1],["Xavier Bertrand",1]]},
+{"id":"cluster17-2026-09-16","institut":"Cluster17","date":"2026-09-16","n":1943,"scores":[["Marine Le Pen",31],["Jean-Luc Mélenchon",19],["Édouard Philippe",19],["Raphaël Glucksmann",12],["Bruno Retailleau",7.5],["Éric Zemmour",3.5],["Nicolas Dupont-Aignan",3],["Marine Tondelier",2.5],["Fabien Roussel",2],["Nathalie Arthaud",0.5]]},
+{"id":"ifop-2026-09-11","institut":"Ifop","date":"2026-09-11","n":1548,"scores":[["Marine Le Pen",35],["Jean-Luc Mélenchon",17],["Édouard Philippe",14],["Raphaël Glucksmann",9],["Gabriel Attal",7],["Bruno Retailleau",6.5],["Éric Zemmour",4],["Marine Tondelier",3],["Fabien Roussel",2],["Nicolas Dupont-Aignan",2],["Nathalie Arthaud",0.5]]},
+{"id":"opinionway-2026-09-10","institut":"OpinionWay","date":"2026-09-10","n":1001,"scores":[["Marine Le Pen",34],["Jean-Luc Mélenchon",17],["Édouard Philippe",15],["Raphaël Glucksmann",9],["Gabriel Attal",7],["Bruno Retailleau",7],["Marine Tondelier",3],["Fabien Roussel",2],["Nicolas Dupont-Aignan",2],["Éric Zemmour",2],["David Lisnard",2],["Nathalie Arthaud",1],["Karim Bouamrane",1]]},
+{"id":"harris-2026-09-10","institut":"Harris","date":"2026-09-10","n":2052,"scores":[["Marine Le Pen",33],["Jean-Luc Mélenchon",16],["Édouard Philippe",14],["Raphaël Glucksmann",9],["Gabriel Attal",8],["Bruno Retailleau",7],["Éric Zemmour",5],["Marine Tondelier",3],["Fabien Roussel",2],["Nicolas Dupont-Aignan",2],["Nathalie Arthaud",1]]},
+{"id":"opinionway-2026-09-09","institut":"OpinionWay","date":"2026-09-09","n":1001,"scores":[["Marine Le Pen",34],["Jean-Luc Mélenchon",15],["Édouard Philippe",15],["Raphaël Glucksmann",9],["Gabriel Attal",8],["Bruno Retailleau",8],["Éric Zemmour",4],["Marine Tondelier",3],["Fabien Roussel",2],["Nicolas Dupont-Aignan",2],["Nathalie Arthaud",1]]},
+{"id":"ipsos-2026-09-09","institut":"Ipsos","date":"2026-09-09","n":13060,"scores":[["Marine Le Pen",33],["Jean-Luc Mélenchon",15.5],["Édouard Philippe",14],["Raphaël Glucksmann",11.5],["Bruno Retailleau",7],["Gabriel Attal",6],["Marine Tondelier",4],["Éric Zemmour",4],["Fabien Roussel",2.5],["Nicolas Dupont-Aignan",2],["Nathalie Arthaud",0.5]]},
+{"id":"opinionway-2026-09-04","institut":"OpinionWay","date":"2026-09-04","n":1034,"scores":[["Marine Le Pen",34],["Jean-Luc Mélenchon",16],["Édouard Philippe",15],["Raphaël Glucksmann",12],["Gabriel Attal",7],["Bruno Retailleau",7],["Marine Tondelier",3],["Éric Zemmour",3],["Fabien Roussel",2],["Nathalie Arthaud",1]]},
+{"id":"opinionway-2026-09-03","institut":"OpinionWay","date":"2026-09-03","n":1003,"scores":[["Marine Le Pen",34],["Jean-Luc Mélenchon",17],["Édouard Philippe",15],["Raphaël Glucksmann",11],["Gabriel Attal",7],["Bruno Retailleau",7],["Marine Tondelier",3],["Éric Zemmour",3],["Fabien Roussel",2],["Nathalie Arthaud",1]]},
+{"id":"ipsos-2026-09-02","institut":"Ipsos","date":"2026-09-02","n":1500,"scores":[["Marine Le Pen",34],["Jean-Luc Mélenchon",15],["Édouard Philippe",14.5],["Raphaël Glucksmann",11.5],["Gabriel Attal",7.5],["Bruno Retailleau",6],["Marine Tondelier",3.5],["Éric Zemmour",3],["Fabien Roussel",2.5],["Nicolas Dupont-Aignan",2],["Nathalie Arthaud",0.5]]},
+{"id":"cluster17-2026-09-01","institut":"Cluster17","date":"2026-09-01","n":1711,"scores":[["Marine Le Pen",30],["Jean-Luc Mélenchon",18],["Édouard Philippe",18],["Raphaël Glucksmann",11.5],["Bruno Retailleau",7.5],["Dominique de Villepin",3.5],["Éric Zemmour",3.5],["Nicolas Dupont-Aignan",3],["Fabien Roussel",2],["Marine Tondelier",2],["Nathalie Arthaud",1]]},
+{"id":"elabe-2026-08-28","institut":"Elabe","date":"2026-08-28","n":1503,"scores":[["Marine Le Pen",34],["Édouard Philippe",17],["Jean-Luc Mélenchon",14],["Raphaël Glucksmann",11.5],["Bruno Retailleau",6.5],["Éric Zemmour",4],["Marine Tondelier",3.5],["Fabien Roussel",3],["Nicolas Dupont-Aignan",3],["Dominique de Villepin",2],["Nathalie Arthaud",1.5]]},
+{"id":"ifop-2026-08-25","institut":"Ifop","date":"2026-08-25","n":1598,"scores":[["Marine Le Pen",33],["Jean-Luc Mélenchon",16],["Édouard Philippe",14.5],["Raphaël Glucksmann",11],["Gabriel Attal",8],["Bruno Retailleau",6],["Éric Zemmour",3.5],["Fabien Roussel",3],["Marine Tondelier",3],["Nicolas Dupont-Aignan",1.5],["Nathalie Arthaud",0.5]]},
+{"id":"harris-2026-08-19","institut":"Harris","date":"2026-08-19","n":1764,"scores":[["Marine Le Pen",35],["Jean-Luc Mélenchon",16],["Édouard Philippe",14],["Raphaël Glucksmann",10],["Gabriel Attal",8],["Bruno Retailleau",6],["Marine Tondelier",3],["Éric Zemmour",3],["Fabien Roussel",2],["Nicolas Dupont-Aignan",2],["Nathalie Arthaud",1]]},
+{"id":"cluster17-2026-07-24","institut":"Cluster17","date":"2026-07-24","n":1506,"scores":[["Marine Le Pen",30],["Jean-Luc Mélenchon",18],["Édouard Philippe",18],["Raphaël Glucksmann",10],["Bruno Retailleau",8],["Éric Zemmour",4],["Marine Tondelier",3],["Dominique de Villepin",3],["Nicolas Dupont-Aignan",3],["Fabien Roussel",2],["Nathalie Arthaud",1]]},
+{"id":"verian-2026-07-10","institut":"Verian","date":"2026-07-10","n":1047,"scores":[["Marine Le Pen",37],["Édouard Philippe",17],["Jean-Luc Mélenchon",15],["Raphaël Glucksmann",11],["Gabriel Attal",8],["Bruno Retailleau",7],["Éric Zemmour",3],["Fabien Roussel",2]]},
+{"id":"elabe-2026-07-10","institut":"Elabe","date":"2026-07-10","n":1503,"scores":[["Marine Le Pen",35],["Jean-Luc Mélenchon",14.5],["Édouard Philippe",14],["Raphaël Glucksmann",8.5],["Bruno Retailleau",8.5],["Gabriel Attal",7.5],["Marine Tondelier",4],["Éric Zemmour",3],["Fabien Roussel",2.5],["Nicolas Dupont-Aignan",1.5],["Nathalie Arthaud",1]]},
+{"id":"opinionway-2026-07-09","institut":"OpinionWay","date":"2026-07-09","n":963,"scores":[["Marine Le Pen",35],["Édouard Philippe",18],["Jean-Luc Mélenchon",13],["Raphaël Glucksmann",9],["Bruno Retailleau",8],["Gabriel Attal",7],["Marine Tondelier",5],["Éric Zemmour",3],["Fabien Roussel",2],["Nathalie Arthaud",1]]},
+{"id":"ifop-2026-07-08","institut":"Ifop","date":"2026-07-08","n":984,"scores":[["Marine Le Pen",36],["Jean-Luc Mélenchon",15],["Gabriel Attal",15],["Raphaël Glucksmann",12],["Bruno Retailleau",10],["Marine Tondelier",4],["Éric Zemmour",3.5],["Fabien Roussel",2],["Nicolas Dupont-Aignan",2],["Nathalie Arthaud",0.5]]},
+{"id":"harris-2026-07-08","institut":"Harris","date":"2026-07-08","n":1592,"scores":[["Marine Le Pen",35],["Jean-Luc Mélenchon",16],["Édouard Philippe",14],["Raphaël Glucksmann",10],["Gabriel Attal",8],["Bruno Retailleau",7],["Éric Zemmour",4],["Fabien Roussel",2],["Marine Tondelier",2],["Nathalie Arthaud",1],["Nicolas Dupont-Aignan",1]]},
+{"id":"ifop-2026-06-24","institut":"Ifop","date":"2026-06-24","n":1415,"scores":[["Jordan Bardella",36],["Édouard Philippe",14],["Jean-Luc Mélenchon",13],["Raphaël Glucksmann",9],["Gabriel Attal",8],["Bruno Retailleau",8],["Éric Zemmour",4],["Fabien Roussel",3],["Marine Tondelier",2.5],["Nicolas Dupont-Aignan",2],["Nathalie Arthaud",0.5]]},
+{"id":"opinionway-2026-06-11","institut":"OpinionWay","date":"2026-06-11","n":1001,"scores":[["Jordan Bardella",33],["Édouard Philippe",19],["Jean-Luc Mélenchon",13],["Raphaël Glucksmann",13],["Bruno Retailleau",8],["Marine Tondelier",5],["Fabien Roussel",3],["Éric Zemmour",3],["Nicolas Dupont-Aignan",2],["Nathalie Arthaud",1]]},
+{"id":"ifop-2026-05-28","institut":"Ifop","date":"2026-05-28","n":1501,"scores":[["Jordan Bardella",34],["Édouard Philippe",14],["Jean-Luc Mélenchon",13],["Raphaël Glucksmann",9],["Gabriel Attal",9],["Bruno Retailleau",8],["Marine Tondelier",4],["Éric Zemmour",4],["Fabien Roussel",2.5],["Nicolas Dupont-Aignan",2],["Nathalie Arthaud",0.5]]},
+{"id":"ipsos-2026-05-28","institut":"Ipsos","date":"2026-05-28","n":1500,"scores":[["Jordan Bardella",33.5],["Jean-Luc Mélenchon",13],["Édouard Philippe",13],["Raphaël Glucksmann",11],["Gabriel Attal",8.5],["Bruno Retailleau",7.5],["Marine Tondelier",4],["Éric Zemmour",4],["Fabien Roussel",3],["Nicolas Dupont-Aignan",1.5],["Nathalie Arthaud",1]]},
+{"id":"harris-2026-05-27","institut":"Harris","date":"2026-05-27","n":1744,"scores":[["Jordan Bardella",32],["Jean-Luc Mélenchon",14],["Édouard Philippe",13],["Raphaël Glucksmann",10],["Gabriel Attal",9],["Bruno Retailleau",8],["Éric Zemmour",5],["Fabien Roussel",3],["Marine Tondelier",3],["Nicolas Dupont-Aignan",2],["Nathalie Arthaud",1]]},
+{"id":"odoxa-2026-05-21","institut":"Odoxa","date":"2026-05-21","n":1005,"scores":[["Jordan Bardella",32],["Édouard Philippe",17],["Jean-Luc Mélenchon",16],["Raphaël Glucksmann",11],["Bruno Retailleau",9],["Éric Zemmour",6],["Marine Tondelier",4],["Fabien Roussel",2.5],["Nicolas Dupont-Aignan",2],["Nathalie Arthaud",0.5]]},
+{"id":"harris-2026-04-30","institut":"Harris","date":"2026-04-30","n":1725,"scores":[["Jordan Bardella",34],["Édouard Philippe",19],["Jean-Luc Mélenchon",12],["Raphaël Glucksmann",11],["Bruno Retailleau",9],["Éric Zemmour",5],["Fabien Roussel",4],["Marine Tondelier",4],["Nathalie Arthaud",1],["Nicolas Dupont-Aignan",1]]},
+{"id":"elabe-2026-03-27","institut":"Elabe","date":"2026-03-27","n":1504,"scores":[["Jordan Bardella",35],["Édouard Philippe",20.5],["Jean-Luc Mélenchon",10.5],["Raphaël Glucksmann",10.5],["Bruno Retailleau",7],["Marine Tondelier",4.5],["Fabien Roussel",3],["Dominique de Villepin",3],["Éric Zemmour",3],["Nicolas Dupont-Aignan",2.5],["Nathalie Arthaud",0.5]]},
+{"id":"opinionway-2026-03-26","institut":"OpinionWay","date":"2026-03-26","n":988,"scores":[["Jordan Bardella",37],["Édouard Philippe",18],["Raphaël Glucksmann",15],["Jean-Luc Mélenchon",13],["Bruno Retailleau",11],["Sarah Knafo",5],["Nathalie Arthaud",1]]},
+{"id":"odoxa-2026-03-26","institut":"Odoxa","date":"2026-03-26","n":1299,"scores":[["Jordan Bardella",34],["Édouard Philippe",21],["Jean-Luc Mélenchon",12],["Raphaël Glucksmann",10],["Bruno Retailleau",8],["Marine Tondelier",5],["Sarah Knafo",5],["Fabien Roussel",2],["Nicolas Dupont-Aignan",2],["Nathalie Arthaud",1]]},
+{"id":"harris-2026-03-22","institut":"Harris","date":"2026-03-22","n":null,"scores":[["Jordan Bardella",35],["Édouard Philippe",18],["Raphaël Glucksmann",14],["Jean-Luc Mélenchon",11],["Bruno Retailleau",7],["Éric Zemmour",5],["Marine Tondelier",4],["Fabien Roussel",3],["Nicolas Dupont-Aignan",2],["Nathalie Arthaud",1]]},
+{"id":"ifop-2026-02-27","institut":"Ifop","date":"2026-02-27","n":1393,"scores":[["Jordan Bardella",36],["Édouard Philippe",16],["Jean-Luc Mélenchon",11],["Raphaël Glucksmann",10],["Bruno Retailleau",10],["Marine Tondelier",4],["Éric Zemmour",4],["Dominique de Villepin",3.5],["Nicolas Dupont-Aignan",2.5],["Fabien Roussel",2],["Nathalie Arthaud",1]]}
+]};
+/* __END_DATA__ */
+
+/* ---------------- configuration visuelle ---------------- */
+const PARTI = {
+  "Marine Le Pen":"RN", "Jordan Bardella":"RN", "Édouard Philippe":"Horizons",
+  "Jean-Luc Mélenchon":"LFI", "Raphaël Glucksmann":"PP", "Gabriel Attal":"Renaissance",
+  "Bruno Retailleau":"LR", "Éric Zemmour":"Reconquête", "Marine Tondelier":"Écologistes",
+  "Fabien Roussel":"PCF", "Nicolas Dupont-Aignan":"DLF", "Nathalie Arthaud":"LO",
+  "François Hollande":"PS", "Sarah Knafo":"Reconquête"
+};
+const COULEURS = {
+  "Marine Le Pen":"#10357f", "Jordan Bardella":"#7c9bd4",
+  "Jean-Luc Mélenchon":"#d43a2f", "Édouard Philippe":"#0f8b8d",
+  "Raphaël Glucksmann":"#c2418e", "Gabriel Attal":"#e0a30c",
+  "Bruno Retailleau":"#4a5d8f", "Éric Zemmour":"#6d4c9f",
+  "Marine Tondelier":"#2e9e5b", "François Hollande":"#e56b8c",
+  "Fabien Roussel":"#a34d2e", "Sarah Knafo":"#8f6bbf",
+  "Dominique de Villepin":"#64748b", "David Lisnard":"#376f8a",
+  "François Ruffin":"#b5533c", "Nicolas Dupont-Aignan":"#4d7c5f",
+  "Nathalie Arthaud":"#8a8f3d", "Xavier Bertrand":"#57683f", "Karim Bouamrane":"#9d5b7a"
+};
+const PALETTE = ["#5e548e","#885a5a","#3e7d8e","#8c7a32","#7b4f63","#4f6d46","#996f2f","#55708f"];
+const PAR_DEFAUT = new Set(["Marine Le Pen","Jean-Luc Mélenchon","Édouard Philippe",
+  "Raphaël Glucksmann","Gabriel Attal","Bruno Retailleau","Jordan Bardella"]);
+
+/* ---------------- état ---------------- */
+let DATA = null, VISIBLES = new Set(PAR_DEFAUT), FENETRE = 0.5;
+let SONDAGES = [];        // triés du plus ancien au plus récent
+let CANDIDATS = [];       // triés par dernier score décroissant
+const TMIN = Date.UTC(2026, 1, 12), TMAX = Date.UTC(2026, 9, 20);
+const YMAX = 40;
+
+const fmtPct = v => v.toLocaleString("fr-FR", {minimumFractionDigits:0, maximumFractionDigits:1}) + " %";
+const fmtDate = d => new Date(d + "T00:00:00Z").toLocaleDateString("fr-FR",
+  {day:"numeric", month:"long", year:"numeric", timeZone:"UTC"});
+const fmtMois = d => new Date(d).toLocaleDateString("fr-FR", {month:"short", year:"2-digit", timeZone:"UTC"});
+const t = d => Date.UTC(+d.slice(0,4), +d.slice(5,7) - 1, +d.slice(8,10));
+
+/* ---------------- LOESS ---------------- */
+/* Régression locale pondérée : noyau tricube, ajustement linéaire local.
+   xs/ys triés par x croissant ; frac = part des points dans la fenêtre. */
+function loess(xs, ys, frac) {
+  const n = xs.length;
+  if (n < 2) return xs.map((x, i) => [x, ys[i]]);
+  const m = Math.max(2, Math.round(n * Math.min(Math.max(frac, 0.05), 1)));
+  const pts = [], GRILLE = 120;
+  for (let g = 0; g <= GRILLE; g++) {
+    const x = xs[0] + (xs[n - 1] - xs[0]) * g / GRILLE;
+    const idx = xs.map((xi, i) => [Math.abs(xi - x), i]).sort((a, b) => a[0] - b[0]).slice(0, m);
+    const d = idx[idx.length - 1][0] || 1e-9;
+    let sw = 0, swx = 0, swy = 0, swxx = 0, swxy = 0;
+    for (const [, i] of idx) {
+      const u = Math.abs(xs[i] - x) / d;
+      const w = u < 1 ? Math.pow(1 - u * u * u, 3) : 0;
+      sw += w; swx += w * xs[i]; swy += w * ys[i];
+      swxx += w * xs[i] * xs[i]; swxy += w * xs[i] * ys[i];
+    }
+    const det = sw * swxx - swx * swx;
+    let y;
+    if (Math.abs(det) < 1e-12) y = sw ? swy / sw : ys[idx[0][1]];
+    else { const b = (sw * swxy - swx * swy) / det, a = (swy - b * swx) / sw; y = a + b * x; }
+    pts.push([x, Math.max(0, y)]);
+  }
+  return pts;
+}
+
+/* ---------------- chargement des données ---------------- */
+async function chargerDonnees() {
+  try {
+    const reponse = await fetch("data.json", {cache: "no-store"});
+    if (!reponse.ok) throw new Error(reponse.status);
+    return {data: await reponse.json(), live: true};
+  } catch (e) {
+    return {data: FALLBACK_DATA, live: false};
+  }
+}
+
+function normaliser(donnees) {
+  SONDAGES = donnees.polls
+    .map(p => ({...p, t: t(p.date),
+                scores: p.scores.map(s => s.length === 3
+                  ? {nom: s[0], parti: s[1], score: s[2]}
+                  : {nom: s[0], parti: PARTI[s[0]] || "", score: s[1]})}))
+    .sort((a, b) => a.t - b.t);
+  const der = new Map(), nb = new Map();
+  for (const s of SONDAGES) for (const c of s.scores) {
+    der.set(c.nom, c.score); nb.set(c.nom, (nb.get(c.nom) || 0) + 1);
+  }
+  CANDIDATS = [...der.keys()].sort((a, b) => der.get(b) - der.get(a))
+    .map(nom => ({nom, dernier: der.get(nom), nb: nb.get(nom)}));
+  /* attribue une couleur stable aux candidats qui n'en ont pas */
+  let ip = 0;
+  for (const c of CANDIDATS)
+    if (!COULEURS[c.nom]) COULEURS[c.nom] = PALETTE[ip++ % PALETTE.length];
+}
+
+/* ---------------- rendu ---------------- */
+const svg = document.getElementById("chart");
+const NS = "http://www.w3.org/2000/svg";
+const W = 960, H = 540, PL = 46, PR = 20, PT = 14, PB = 40;
+const x = tms => PL + (tms - TMIN) / (TMAX - TMIN) * (W - PL - PR);
+const y = v => H - PB - v / YMAX * (H - PT - PB);
+
+function el(tag, attrs, parent) {
+  const node = document.createElementNS(NS, tag);
+  for (const k in attrs) node.setAttribute(k, attrs[k]);
+  (parent || svg).appendChild(node);
+  return node;
+}
+
+function seriesCandidat(nom) {
+  const pts = [];
+  for (const s of SONDAGES) {
+    const c = s.scores.find(c => c.nom === nom);
+    if (c) pts.push([s.t, c.score, s]);
+  }
+  return pts;
+}
+
+function rendreGraphe() {
+  svg.innerHTML = "";
+  /* grille horizontale + labels */
+  for (let v = 0; v <= YMAX; v += 5) {
+    el("line", {x1: PL, x2: W - PR, y1: y(v), y2: y(v),
+      stroke: v === 0 ? "#b8c2cc" : "#eceff3", "stroke-width": v === 0 ? 1.2 : 1});
+    el("text", {x: PL - 8, y: y(v) + 3.5, "text-anchor": "end", class: "text"}).textContent = v;
+  }
+  /* mois */
+  for (let mois = 1; mois <= 9; mois++) {
+    const tms = Date.UTC(2026, mois, 1);
+    el("line", {x1: x(tms), x2: x(tms), y1: PT, y2: y(0), stroke: "#eceff3"});
+    el("text", {x: x(tms) + 4, y: H - PB + 16, class: "text"}).textContent = fmtMois(tms);
+  }
+  el("text", {x: PL - 8, y: y(0) + 22, "text-anchor": "end", class: "text"}).textContent = "%";
+
+  /* couches candidats : points puis courbes (les courbes au-dessus) */
+  const couches = {};
+  for (const c of CANDIDATS) {
+    if (!VISIBLES.has(c.nom)) continue;
+    const pts = seriesCandidat(c.nom);
+    if (!pts.length) continue;
+    const couleur = COULEURS[c.nom];
+    couches[c.nom] = {pts, couleur};
+    const g = el("g", {});
+    for (const [tms, v] of pts)
+      el("circle", {cx: x(tms), cy: y(v), r: 3, fill: couleur, opacity: 0.42}, g);
+    if (pts.length >= 2) {
+      const courbe = loess(pts.map(p => p[0]), pts.map(p => p[1]), FENETRE);
+      const d = courbe.map(([tms, v], i) => (i ? "L" : "M") + x(tms).toFixed(1) + " " + y(v).toFixed(1)).join("");
+      el("path", {d, fill: "none", stroke: couleur, "stroke-width": 2.6,
+                  "stroke-linecap": "round", "stroke-linejoin": "round"}, g);
+    }
+  }
+  /* couche d'interaction (tooltip) */
+  const hit = el("rect", {x: PL, y: PT, width: W - PL - PR, height: H - PT - PB, fill: "transparent"});
+  const ligne = el("line", {y1: PT, y2: y(0), stroke: "#9aa7b5", "stroke-dasharray": "3 3", visibility: "hidden"});
+  hit.addEventListener("mousemove", ev => {
+    const rect = svg.getBoundingClientRect();
+    const px = (ev.clientX - rect.left) * W / rect.width;
+    let plusProche = null, ecart = Infinity;
+    for (const s of SONDAGES) { const e = Math.abs(x(s.t) - px); if (e < ecart) { ecart = e; plusProche = s; } }
+    if (!plusProche) return;
+    ligne.setAttribute("x1", x(plusProche.t)); ligne.setAttribute("x2", x(plusProche.t));
+    ligne.setAttribute("visibility", "visible");
+    montrerInfobulle(plusProche, ev, rect);
+  });
+  hit.addEventListener("mouseleave", () => {
+    ligne.setAttribute("visibility", "hidden");
+    document.getElementById("tooltip").style.display = "none";
+  });
+}
+
+function montrerInfobulle(sondage, ev, rect) {
+  const bulle = document.getElementById("tooltip");
+  const rows = CANDIDATS.filter(c => VISIBLES.has(c.nom))
+    .map(c => ({...c, score: (sondage.scores.find(s => s.nom === c.nom) || {}).score}))
+    .filter(c => c.score !== undefined);
+  bulle.innerHTML = "<h3>" + sondage.institut + " · " + fmtDate(sondage.date) +
+    (sondage.n ? " · n = " + sondage.n.toLocaleString("fr-FR") : "") + "</h3>" +
+    rows.map(c => '<div class="row"><span><span class="dot" style="display:inline-block;background:' +
+      (COULEURS[c.nom] || "#888") + '"></span> ' + c.nom +
+      '</span><span><b>' + fmtPct(c.score) + "</b></span></div>").join("");
+  bulle.style.display = "block";
+  const wrap = bulle.parentElement.getBoundingClientRect();
+  const lx = ev.clientX - rect.left + (W / rect.width) * 14, ly = ev.clientY - rect.top;
+  bulle.style.left = Math.min(lx / (W / rect.width) + 8, wrap.width - 210) + "px";
+  bulle.style.top = Math.max(0, ly / (rect.height / H) - 20) + "px";
+}
+
+function rendreLegende() {
+  const cont = document.getElementById("legende");
+  cont.innerHTML = "";
+  for (const c of CANDIDATS) {
+    const couleur = COULEURS[c.nom];
+    const pts = seriesCandidat(c.nom);
+    const courbe = pts.length >= 2 ? loess(pts.map(p => p[0]), pts.map(p => p[1]), FENETRE) : [];
+    const fin = courbe.length ? courbe[courbe.length - 1][1] : c.dernier;
+    const t60 = courbe.length ? courbe.reduce((best, p) =>
+      Math.abs(p[0] - (pts[pts.length - 1][0] - 60 * 864e5)) <
+      Math.abs(best[0] - (pts[pts.length - 1][0] - 60 * 864e5)) ? p : best)[1] : fin;
+    const delta = fin - t60;
+    const fleche = delta > 0.3 ? "↗" : delta < -0.3 ? "↘" : "→";
+    const cls = delta > 0.3 ? "up" : delta < -0.3 ? "down" : "trend";
+    const b = document.createElement("button");
+    b.className = VISIBLES.has(c.nom) ? "" : "off";
+    b.innerHTML = '<span class="dot" style="background:' + couleur + '"></span>' + c.nom +
+      (PARTI[c.nom] ? ' <span class="trend">· ' + PARTI[c.nom] + "</span>" : "") +
+      ' <span class="' + cls + '">' + fmtPct(fin) + " " + fleche +
+      (courbe.length ? " (" + (delta >= 0 ? "+" : "") +
+        delta.toLocaleString("fr-FR", {minimumFractionDigits:0, maximumFractionDigits:1}) + " / 2 mois)" : "") +
+      "</span>";
+    b.onclick = () => {
+      VISIBLES.has(c.nom) ? VISIBLES.delete(c.nom) : VISIBLES.add(c.nom);
+      rendreLegende(); rendreGraphe();
+    };
+    cont.appendChild(b);
+  }
+}
+
+function rendreMeta(live) {
+  const instituts = new Set(SONDAGES.map(s => s.institut));
+  document.getElementById("meta").innerHTML = [
+    "<span class='chip'><b>" + SONDAGES.length + "</b> sondages</span>",
+    "<span class='chip'>du <b>" + SONDAGES[0].date.split("-").reverse().join("/") + "</b> au <b>" +
+      SONDAGES[SONDAGES.length - 1].date.split("-").reverse().join("/") + "</b></span>",
+    "<span class='chip'><b>" + instituts.size + "</b> instituts</span>",
+    "<span class='chip'>données : <b>" + (live ? "data.json" : "embarquées (démo)") + "</b> · MAJ <b>" +
+      (DATA.updated || "").slice(0, 10) + "</b></span>"
+  ].join("");
+}
+
+document.getElementById("bw").addEventListener("input", ev => {
+  FENETRE = +ev.target.value;
+  document.getElementById("bwv").textContent = Math.round(FENETRE * 100) + " %";
+  rendreGraphe(); rendreLegende();
+});
+
+(async () => {
+  const {data, live} = await chargerDonnees();
+  DATA = data;
+  normaliser(data);
+  rendreMeta(live);
+  rendreLegende();
+  rendreGraphe();
+})();
+</script>
+</body>
+</html>
