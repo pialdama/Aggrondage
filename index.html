@@ -182,7 +182,7 @@ const court = nom => COURT[nom] ||
 let DATA = null, VISIBLES = new Set(PAR_DEFAUT), FENETRE = 0.5;
 let SONDAGES = [];        // triés du plus ancien au plus récent
 let CANDIDATS = [];       // triés par dernier score décroissant
-const TMIN = Date.UTC(2026, 1, 12), TMAX = Date.UTC(2026, 9, 20);
+let TMIN = 0, TMAX = 0;   /* bornes de l'axe X, calculées dynamiquement */
 const YMAX = 40;
 
 const fmtPct = v => v.toLocaleString("fr-FR", {minimumFractionDigits:0, maximumFractionDigits:1}) + " %";
@@ -237,6 +237,11 @@ function normaliser(donnees) {
                   ? {nom: s[0], parti: s[1], score: s[2]}
                   : {nom: s[0], parti: PARTI[s[0]] || "", score: s[1]})}))
     .sort((a, b) => a.t - b.t);
+  /* Axe X dynamique : calé sur la période réellement couverte par les sondages,
+     avec 12 jours de marge à gauche et 10 à droite (l'espace des étiquettes
+     est fourni par la marge droite du graphique, PR). */
+  TMIN = SONDAGES[0].t - 12 * 864e5;
+  TMAX = SONDAGES[SONDAGES.length - 1].t + 10 * 864e5;
   const der = new Map(), nb = new Map();
   for (const s of SONDAGES) for (const c of s.scores) {
     der.set(c.nom, c.score); nb.set(c.nom, (nb.get(c.nom) || 0) + 1);
@@ -252,7 +257,7 @@ function normaliser(donnees) {
 /* ---------------- rendu ---------------- */
 const svg = document.getElementById("chart");
 const NS = "http://www.w3.org/2000/svg";
-const W = 960, H = 540, PL = 46, PR = 124, PT = 14, PB = 40;
+const W = 960, H = 540, PL = 46, PR = 134, PT = 14, PB = 40;
 const x = tms => PL + (tms - TMIN) / (TMAX - TMIN) * (W - PL - PR);
 const y = v => H - PB - v / YMAX * (H - PT - PB);
 
@@ -280,12 +285,15 @@ function rendreGraphe() {
       stroke: v === 0 ? "#b8c2cc" : "#eceff3", "stroke-width": v === 0 ? 1.2 : 1});
     el("text", {x: PL - 8, y: y(v) + 3.5, "text-anchor": "end", class: "text"}).textContent = v;
   }
-  /* mois */
-  for (let mois = 1; mois <= 9; mois++) {
-    const tms = Date.UTC(2026, mois, 1);
-    el("line", {x1: x(tms), x2: x(tms), y1: PT, y2: y(0), stroke: "#eceff3"});
-    el("text", {x: x(tms) + 4, y: H - PB + 16, class: "text"}).textContent = fmtMois(tms);
-  }
+  /* mois : graduations générées automatiquement sur toute la période */
+  const an0 = new Date(TMIN).getUTCFullYear(), an1 = new Date(TMAX).getUTCFullYear();
+  for (let annee = an0; annee <= an1; annee++)
+    for (let mois = 0; mois < 12; mois++) {
+      const tms = Date.UTC(annee, mois, 1);
+      if (tms < TMIN || tms > TMAX) continue;
+      el("line", {x1: x(tms), x2: x(tms), y1: PT, y2: y(0), stroke: "#eceff3"});
+      el("text", {x: x(tms) + 4, y: H - PB + 16, class: "text"}).textContent = fmtMois(tms);
+    }
   el("text", {x: PL - 8, y: y(0) + 22, "text-anchor": "end", class: "text"}).textContent = "%";
 
   /* couches candidats : points puis courbes (les courbes au-dessus) */
