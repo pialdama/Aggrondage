@@ -39,6 +39,13 @@
                color: var(--muted); white-space: nowrap; }
   .loess-ctl input { width: 150px; }
   .loess-ctl b { color: var(--ink); }
+  .degres { display: inline-flex; border: 1px solid var(--line); border-radius: 8px;
+            overflow: hidden; }
+  .degres button { background: none; border: none; padding: 3px 11px; cursor: pointer;
+                   font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .degres button + button { border-left: 1px solid var(--line); }
+  .degres button.actif { background: var(--accent); color: #fff; font-weight: 600; }
+  .degres button:hover:not(.actif) { background: #eef1f5; }
   .chartwrap { position: relative; background: var(--card); border: 1px solid var(--line);
                border-radius: 12px; padding: 10px 8px 4px; }
   svg { display: block; width: 100%; height: auto; }
@@ -69,6 +76,13 @@
       <input type="range" id="bw" min="0.2" max="0.8" step="0.05" value="0.5">
       <b id="bwv">50&#8239;%</b>
     </label>
+    <label class="loess-ctl">Degré du polynôme
+      <span class="degres" id="degres">
+        <button type="button" data-deg="0" title="Moyenne pondérée locale">0</button>
+        <button type="button" data-deg="1" class="actif" title="Régression linéaire locale">1</button>
+        <button type="button" data-deg="2" title="Régression quadratique locale">2</button>
+      </span>
+    </label>
   </section>
 
   <section class="chartwrap">
@@ -78,7 +92,7 @@
   </section>
 
   <p class="note">
-    Chaque point est le score publié dans l'<b>hypothèse principale</b> d'un sondage (1<sup>er</sup>&#8239;tour) ; les listes de candidats testées varient d'un sondage à l'autre, un candidat non testé n'a pas de point à cette date. Les courbes épaisses sont des <b>tendances LOESS</b> (régression locale pondérée) calculées sur les sondages où le candidat est testé — ajustez la fenêtre pour plus ou moins de lissage. Le score affiché en bout de courbe est la <b>valeur lissée au dernier sondage</b> où le candidat a été testé. Jusqu'en juin 2026, les instituts testaient <b>Jordan Bardella</b> comme candidat du RN&#8239;; <b>Marine Le Pen</b> l'a remplacé dans les hypothèses à partir de juillet.
+    Chaque point est le score publié dans l'<b>hypothèse principale</b> d'un sondage (1<sup>er</sup>&#8239;tour) ; les listes de candidats testées varient d'un sondage à l'autre, un candidat non testé n'a pas de point à cette date. Les courbes épaisses sont des <b>tendances LOESS</b> (régression locale pondérée) calculées sur les sondages où le candidat est testé — ajustez la fenêtre et le <b>degré du polynôme local</b> (0&#8239;: moyenne pondérée, 1&#8239;: linéaire, 2&#8239;: quadratique) pour plus ou moins de lissage. Le score affiché en bout de courbe est la <b>valeur lissée au dernier sondage</b> où le candidat a été testé. Jusqu'en juin 2026, les instituts testaient <b>Jordan Bardella</b> comme candidat du RN&#8239;; <b>Marine Le Pen</b> l'a remplacé dans les hypothèses à partir de juillet.
   </p>
 </main>
 
@@ -179,7 +193,7 @@ const court = nom => COURT[nom] ||
     : nom);
 
 /* ---------------- état ---------------- */
-let DATA = null, VISIBLES = new Set(PAR_DEFAUT), FENETRE = 0.5;
+let DATA = null, VISIBLES = new Set(PAR_DEFAUT), FENETRE = 0.5, DEGRE = 1;
 let SONDAGES = [];        // triés du plus ancien au plus récent
 let CANDIDATS = [];       // triés par dernier score décroissant
 let TMIN = 0, TMAX = 0;   /* bornes de l'axe X, calculées dynamiquement */
@@ -192,29 +206,68 @@ const fmtMois = d => new Date(d).toLocaleDateString("fr-FR", {month:"short", yea
 const t = d => Date.UTC(+d.slice(0,4), +d.slice(5,7) - 1, +d.slice(8,10));
 
 /* ---------------- LOESS ---------------- */
-/* Régression locale pondérée : noyau tricube, ajustement linéaire local.
-   xs/ys triés par x croissant ; frac = part des points dans la fenêtre. */
-function loess(xs, ys, frac) {
+/* Régression locale pondérée : noyau tricube, ajustement polynomial local.
+   xs/ys triés par x croissant ; frac = part des points dans la fenêtre ;
+   deg = degré du polynôme local : 0 (moyenne pondérée), 1 (linéaire), 2 (quadratique). */
+function resoudreSysteme(M, taille) {
+  /* élimination de Gauss avec pivot partiel, M = [matrice | second membre] */
+  for (let col = 0; col < taille; col++) {
+    let piv = col;
+    for (let r = col + 1; r < taille; r++)
+      if (Math.abs(M[r][col]) > Math.abs(M[piv][col])) piv = r;
+    if (Math.abs(M[piv][col]) < 1e-12) return null;   /* système singulier */
+    if (piv !== col) { const tmp = M[col]; M[col] = M[piv]; M[piv] = tmp; }
+    for (let r = col + 1; r < taille; r++) {
+      const f = M[r][col] / M[col][col];
+      for (let k = col; k <= taille; k++) M[r][k] -= f * M[col][k];
+    }
+  }
+  const c = new Array(taille).fill(0);
+  for (let r = taille - 1; r >= 0; r--) {
+    let s = M[r][taille];
+    for (let k = r + 1; k < taille; k++) s -= M[r][k] * c[k];
+    c[r] = s / M[r][r];
+  }
+  return c;
+}
+
+function loess(xs, ys, frac, deg) {
   const n = xs.length;
   if (n < 2) return xs.map((x, i) => [x, ys[i]]);
-  const m = Math.max(2, Math.round(n * Math.min(Math.max(frac, 0.05), 1)));
+  const d = Math.max(0, Math.min(deg || 0, n - 1));
+  const m = Math.max(d + 1, Math.round(n * Math.min(Math.max(frac, 0.05), 1)));
   const pts = [], GRILLE = 120;
   for (let g = 0; g <= GRILLE; g++) {
-    const x = xs[0] + (xs[n - 1] - xs[0]) * g / GRILLE;
-    const idx = xs.map((xi, i) => [Math.abs(xi - x), i]).sort((a, b) => a[0] - b[0]).slice(0, m);
-    const d = idx[idx.length - 1][0] || 1e-9;
-    let sw = 0, swx = 0, swy = 0, swxx = 0, swxy = 0;
+    const x0 = xs[0] + (xs[n - 1] - xs[0]) * g / GRILLE;
+    const idx = xs.map((xi, i) => [Math.abs(xi - x0), i]).sort((a, b) => a[0] - b[0]).slice(0, m);
+    const dmax = idx[idx.length - 1][0] || 1e-9;
+    /* moments du système normal, sur la variable centrée-réduite q = (x - x0) / dmax :
+       conditionnement numérique sain même en degré 2 malgré les timestamps en millisecondes */
+    const S = [0, 0, 0, 0, 0], T = [0, 0, 0];
     for (const [, i] of idx) {
-      const u = Math.abs(xs[i] - x) / d;
+      const u = Math.abs(xs[i] - x0) / dmax;
       const w = u < 1 ? Math.pow(1 - u * u * u, 3) : 0;
-      sw += w; swx += w * xs[i]; swy += w * ys[i];
-      swxx += w * xs[i] * xs[i]; swxy += w * xs[i] * ys[i];
+      const q = (xs[i] - x0) / dmax, q2 = q * q;
+      S[0] += w; S[1] += w * q; S[2] += w * q2;
+      if (d > 1) { S[3] += w * q * q2; S[4] += w * q2 * q2; }
+      T[0] += w * ys[i]; T[1] += w * q * ys[i];
+      if (d > 1) T[2] += w * q2 * ys[i];
     }
-    const det = sw * swxx - swx * swx;
     let y;
-    if (Math.abs(det) < 1e-12) y = sw ? swy / sw : ys[idx[0][1]];
-    else { const b = (sw * swxy - swx * swy) / det, a = (swy - b * swx) / sw; y = a + b * x; }
-    pts.push([x, Math.max(0, y)]);
+    if (d === 0) {
+      y = S[0] ? T[0] / S[0] : ys[idx[0][1]];
+    } else {
+      const taille = d + 1, M = [];
+      for (let r = 0; r < taille; r++) {
+        const ligne = [];
+        for (let c2 = 0; c2 < taille; c2++) ligne.push(S[r + c2]);
+        ligne.push(T[r]);
+        M.push(ligne);
+      }
+      const sol = resoudreSysteme(M, taille);
+      y = sol ? sol[0] : (S[0] ? T[0] / S[0] : ys[idx[0][1]]);   /* c0 = valeur ajustée en x0 */
+    }
+    pts.push([x0, Math.max(0, y)]);
   }
   return pts;
 }
@@ -308,7 +361,7 @@ function rendreGraphe() {
     for (const [tms, v] of pts)
       el("circle", {cx: x(tms), cy: y(v), r: 3, fill: couleur, opacity: 0.42}, g);
     if (pts.length >= 2) {
-      const courbe = loess(pts.map(p => p[0]), pts.map(p => p[1]), FENETRE);
+      const courbe = loess(pts.map(p => p[0]), pts.map(p => p[1]), FENETRE, DEGRE);
       const d = courbe.map(([tms, v], i) => (i ? "L" : "M") + x(tms).toFixed(1) + " " + y(v).toFixed(1)).join("");
       el("path", {d, fill: "none", stroke: couleur, "stroke-width": 2.6,
                   "stroke-linecap": "round", "stroke-linejoin": "round"}, g);
@@ -372,7 +425,7 @@ function rendreLegende() {
   for (const c of CANDIDATS) {
     const couleur = COULEURS[c.nom];
     const pts = seriesCandidat(c.nom);
-    const courbe = pts.length >= 2 ? loess(pts.map(p => p[0]), pts.map(p => p[1]), FENETRE) : [];
+    const courbe = pts.length >= 2 ? loess(pts.map(p => p[0]), pts.map(p => p[1]), FENETRE, DEGRE) : [];
     const fin = courbe.length ? courbe[courbe.length - 1][1] : c.dernier;
     const t60 = courbe.length ? courbe.reduce((best, p) =>
       Math.abs(p[0] - (pts[pts.length - 1][0] - 60 * 864e5)) <
@@ -412,6 +465,14 @@ document.getElementById("bw").addEventListener("input", ev => {
   FENETRE = +ev.target.value;
   document.getElementById("bwv").textContent = Math.round(FENETRE * 100) + " %";
   rendreGraphe(); rendreLegende();
+});
+
+document.querySelectorAll("#degres button").forEach(b => {
+  b.addEventListener("click", () => {
+    DEGRE = +b.dataset.deg;
+    document.querySelectorAll("#degres button").forEach(x => x.classList.toggle("actif", x === b));
+    rendreGraphe(); rendreLegende();
+  });
 });
 
 (async () => {
