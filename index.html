@@ -39,6 +39,7 @@
                color: var(--muted); white-space: nowrap; }
   .loess-ctl input { width: 150px; }
   .loess-ctl b { color: var(--ink); }
+  .loess-ctl input[type="checkbox"] { accent-color: var(--accent); }
   .degres { display: inline-flex; border: 1px solid var(--line); border-radius: 8px;
             overflow: hidden; }
   .degres button { background: none; border: none; padding: 3px 11px; cursor: pointer;
@@ -92,6 +93,10 @@
         <button type="button" data-deg="2" title="Régression quadratique locale">2</button>
       </span>
     </label>
+    <label class="loess-ctl" title="La variance d'un pourcentage estimé varie en 1/n : un sondage à 5 000 répondants pèse 5 fois plus qu'un sondage à 1 000.">
+      <input type="checkbox" id="pondere" checked>
+      Pondérer par la taille d'échantillon
+    </label>
   </section>
 
   <section class="chartwrap">
@@ -101,7 +106,7 @@
   </section>
 
   <p class="note">
-    Chaque point est le score publié dans l'<b>hypothèse principale</b> d'un sondage (1<sup>er</sup>&#8239;tour) ; les listes de candidats testées varient d'un sondage à l'autre, un candidat non testé n'a pas de point à cette date. Les courbes épaisses sont des <b>tendances LOESS</b> (régression locale pondérée) calculées sur les sondages où le candidat est testé — ajustez la fenêtre et le <b>degré du polynôme local</b> (0&#8239;: moyenne pondérée, 1&#8239;: linéaire, 2&#8239;: quadratique) pour plus ou moins de lissage. Le score affiché en bout de courbe est la <b>valeur lissée au dernier sondage</b> où le candidat a été testé. Jusqu'en juin 2026, les instituts testaient <b>Jordan Bardella</b> comme candidat du RN&#8239;; <b>Marine Le Pen</b> l'a remplacé dans les hypothèses à partir de juillet.
+    Chaque point est le score publié dans l'<b>hypothèse principale</b> d'un sondage (1<sup>er</sup>&#8239;tour) ; les listes de candidats testées varient d'un sondage à l'autre, un candidat non testé n'a pas de point à cette date. Les courbes épaisses sont des <b>tendances LOESS</b> (régression locale pondérée) calculées sur les sondages où le candidat est testé — ajustez la fenêtre et le <b>degré du polynôme local</b> (0&#8239;: moyenne pondérée, 1&#8239;: linéaire, 2&#8239;: quadratique) pour plus ou moins de lissage. Les sondages sont <b>pondérés par la taille de leur échantillon</b> : la variance d'un pourcentage estimé variant en 1/n, les grands échantillons pèsent proportionnellement davantage (le baromètre Ipsos à 13&#8239;060 répondants compte environ 9 fois plus qu'un sondage à 1&#8239;500). Le score affiché en bout de courbe est la <b>valeur lissée au dernier sondage</b> où le candidat a été testé. Jusqu'en juin 2026, les instituts testaient <b>Jordan Bardella</b> comme candidat du RN&#8239;; <b>Marine Le Pen</b> l'a remplacé dans les hypothèses à partir de juillet.
   </p>
 </main>
 
@@ -202,7 +207,7 @@ const court = nom => COURT[nom] ||
     : nom);
 
 /* ---------------- état ---------------- */
-let DATA = null, VISIBLES = new Set(PAR_DEFAUT), FENETRE = 0.5, DEGRE = 1;
+let DATA = null, VISIBLES = new Set(PAR_DEFAUT), FENETRE = 0.5, DEGRE = 1, PONDERE = true;
 let SONDAGES = [];        // triés du plus ancien au plus récent
 let CANDIDATS = [];       // triés par dernier score décroissant
 let TMIN = 0, TMAX = 0;   /* bornes de l'axe X, calculées dynamiquement */
@@ -217,7 +222,10 @@ const t = d => Date.UTC(+d.slice(0,4), +d.slice(5,7) - 1, +d.slice(8,10));
 /* ---------------- LOESS ---------------- */
 /* Régression locale pondérée : noyau tricube, ajustement polynomial local.
    xs/ys triés par x croissant ; frac = part des points dans la fenêtre ;
-   deg = degré du polynôme local : 0 (moyenne pondérée), 1 (linéaire), 2 (quadratique). */
+   deg = degré du polynôme local : 0 (moyenne pondérée), 1 (linéaire), 2 (quadratique) ;
+   ws = poids de fiabilité de chaque point (∝ taille d'échantillon), 1 par défaut.
+   Le poids final de chaque point est le produit noyau tricube × fiabilité :
+   la distance règle l'étendue spatiale, la fiabilité la précision statistique. */
 function resoudreSysteme(M, taille) {
   /* élimination de Gauss avec pivot partiel, M = [matrice | second membre] */
   for (let col = 0; col < taille; col++) {
@@ -240,11 +248,12 @@ function resoudreSysteme(M, taille) {
   return c;
 }
 
-function loess(xs, ys, frac, deg) {
+function loess(xs, ys, frac, deg, ws) {
   const n = xs.length;
   if (n < 2) return xs.map((x, i) => [x, ys[i]]);
   const d = Math.max(0, Math.min(deg || 0, n - 1));
   const m = Math.max(d + 1, Math.round(n * Math.min(Math.max(frac, 0.05), 1)));
+  const rel = ws && ws.length === n ? ws : xs.map(() => 1);
   const pts = [], GRILLE = 120;
   for (let g = 0; g <= GRILLE; g++) {
     const x0 = xs[0] + (xs[n - 1] - xs[0]) * g / GRILLE;
@@ -255,7 +264,7 @@ function loess(xs, ys, frac, deg) {
     const S = [0, 0, 0, 0, 0], T = [0, 0, 0];
     for (const [, i] of idx) {
       const u = Math.abs(xs[i] - x0) / dmax;
-      const w = u < 1 ? Math.pow(1 - u * u * u, 3) : 0;
+      const w = (u < 1 ? Math.pow(1 - u * u * u, 3) : 0) * rel[i];   /* tricube × fiabilité */
       const q = (xs[i] - x0) / dmax, q2 = q * q;
       S[0] += w; S[1] += w * q; S[2] += w * q2;
       if (d > 1) { S[3] += w * q * q2; S[4] += w * q2 * q2; }
@@ -350,6 +359,19 @@ function seriesCandidat(nom) {
   return pts;
 }
 
+/* Poids de fiabilité ∝ taille d'échantillon : la variance d'un pourcentage
+   estimé varie en 1/n, donc l'inverse de la variance (le poids optimal) varie
+   en n. Les tailles sont normalisées par la médiane de la série (poids ≈ 1),
+   et un sondage sans taille connue prend cette médiane pour rester neutre.
+   Désactivé, tous les poids valent 1 (pondération uniforme). */
+function poidsSeries(pts) {
+  if (!PONDERE) return pts.map(() => 1);
+  const ns = pts.map(p => (p[2] && p[2].n) || null);
+  const connus = ns.filter(v => v).sort((a, b) => a - b);
+  const ref = connus.length ? connus[Math.floor(connus.length / 2)] : 1;
+  return ns.map(v => (v === null ? ref : v) / ref);
+}
+
 function rendreGraphe() {
   svg.innerHTML = "";
   const L = LAYOUT;
@@ -386,7 +408,7 @@ function rendreGraphe() {
     for (const [tms, v] of pts)
       el("circle", {cx: x(tms), cy: y(v), r: 3, fill: couleur, opacity: 0.42}, g);
     if (pts.length >= 2) {
-      const courbe = loess(pts.map(p => p[0]), pts.map(p => p[1]), FENETRE, DEGRE);
+      const courbe = loess(pts.map(p => p[0]), pts.map(p => p[1]), FENETRE, DEGRE, poidsSeries(pts));
       const d = courbe.map(([tms, v], i) => (i ? "L" : "M") + x(tms).toFixed(1) + " " + y(v).toFixed(1)).join("");
       el("path", {d, fill: "none", stroke: couleur, "stroke-width": 2.6,
                   "stroke-linecap": "round", "stroke-linejoin": "round"}, g);
@@ -460,7 +482,7 @@ function rendreLegende() {
   for (const c of CANDIDATS) {
     const couleur = COULEURS[c.nom];
     const pts = seriesCandidat(c.nom);
-    const courbe = pts.length >= 2 ? loess(pts.map(p => p[0]), pts.map(p => p[1]), FENETRE, DEGRE) : [];
+    const courbe = pts.length >= 2 ? loess(pts.map(p => p[0]), pts.map(p => p[1]), FENETRE, DEGRE, poidsSeries(pts)) : [];
     const fin = courbe.length ? courbe[courbe.length - 1][1] : c.dernier;
     const t60 = courbe.length ? courbe.reduce((best, p) =>
       Math.abs(p[0] - (pts[pts.length - 1][0] - 60 * 864e5)) <
@@ -508,6 +530,11 @@ document.querySelectorAll("#degres button").forEach(b => {
     document.querySelectorAll("#degres button").forEach(x => x.classList.toggle("actif", x === b));
     rendreGraphe(); rendreLegende();
   });
+});
+
+document.getElementById("pondere").addEventListener("change", ev => {
+  PONDERE = ev.target.checked;
+  rendreGraphe(); rendreLegende();
 });
 
 /* adaptation au support : le graphique se redessine quand la fenêtre change
