@@ -48,17 +48,26 @@
   .degres button:hover:not(.actif) { background: #eef1f5; }
   .chartwrap { position: relative; background: var(--card); border: 1px solid var(--line);
                border-radius: 12px; padding: 10px 8px 4px; }
-  svg { display: block; width: 100%; height: auto; }
+  svg { display: block; width: 100%; height: auto; touch-action: pan-y; }
   #tooltip { position: absolute; pointer-events: none; background: #fff; border: 1px solid var(--line);
              border-radius: 10px; box-shadow: 0 8px 24px rgba(22,32,46,.14);
-             padding: 10px 12px; font-size: 12.5px; min-width: 190px; display: none; z-index: 5; }
+             padding: 10px 12px; font-size: 12.5px; min-width: 170px; max-width: calc(100vw - 44px);
+             display: none; z-index: 5; }
   #tooltip h3 { margin: 0 0 6px; font-size: 12.5px; color: var(--muted); font-weight: 600; }
   #tooltip .row { display: flex; justify-content: space-between; gap: 14px; padding: 1px 0; }
   #tooltip .row span:last-child { font-variant-numeric: tabular-nums; }
   .note { font-size: 12.5px; color: var(--muted); line-height: 1.55; margin: 0 0 20px; }
   footer { padding-bottom: 34px; font-size: 12px; color: var(--muted); line-height: 1.6; }
   footer a { color: var(--accent); }
-  .text { font-size: 11px; fill: var(--muted); }
+  @media (max-width: 640px) {
+    header, main, footer { padding: 0 12px; }
+    header { padding-top: 20px; }
+    h1 { font-size: 20px; }
+    .loess-ctl input { width: 104px; }
+    .degres button { padding: 3px 9px; }
+    .legende button { font-size: 12px; padding: 2px 7px; }
+  }
+  .text { fill: var(--muted); }   /* la taille de police vient de la disposition SVG */
 </style>
 </head>
 <body>
@@ -310,9 +319,20 @@ function normaliser(donnees) {
 /* ---------------- rendu ---------------- */
 const svg = document.getElementById("chart");
 const NS = "http://www.w3.org/2000/svg";
-const W = 960, H = 540, PL = 46, PR = 134, PT = 14, PB = 40;
-const x = tms => PL + (tms - TMIN) / (TMAX - TMIN) * (W - PL - PR);
-const y = v => H - PB - v / YMAX * (H - PT - PB);
+/* Disposition adaptative : une géométrie dédiée pour ordinateur et smartphone.
+   La page se re-rend quand la fenêtre change de taille ou d'orientation. */
+let LAYOUT = null;
+function miseAJourDisposition() {
+  const mobile = window.innerWidth < 640;
+  LAYOUT = mobile
+    ? { W: 480, H: 640, PL: 34, PR: 14, PT: 12, PB: 34, police: 10,
+        pasY: 10, moisAvecAnnee: false, unMoisSurDeux: true }
+    : { W: 960, H: 540, PL: 46, PR: 134, PT: 14, PB: 40, police: 11.5,
+        pasY: 5, moisAvecAnnee: true, unMoisSurDeux: false };
+  svg.setAttribute("viewBox", "0 0 " + LAYOUT.W + " " + LAYOUT.H);
+}
+const x = tms => LAYOUT.PL + (tms - TMIN) / (TMAX - TMIN) * (LAYOUT.W - LAYOUT.PL - LAYOUT.PR);
+const y = v => LAYOUT.H - LAYOUT.PB - v / YMAX * (LAYOUT.H - LAYOUT.PT - LAYOUT.PB);
 
 function el(tag, attrs, parent) {
   const node = document.createElementNS(NS, tag);
@@ -332,11 +352,13 @@ function seriesCandidat(nom) {
 
 function rendreGraphe() {
   svg.innerHTML = "";
+  const L = LAYOUT;
   /* grille horizontale + labels */
-  for (let v = 0; v <= YMAX; v += 5) {
-    el("line", {x1: PL, x2: W - PR, y1: y(v), y2: y(v),
+  for (let v = 0; v <= YMAX; v += L.pasY) {
+    el("line", {x1: L.PL, x2: L.W - L.PR, y1: y(v), y2: y(v),
       stroke: v === 0 ? "#b8c2cc" : "#eceff3", "stroke-width": v === 0 ? 1.2 : 1});
-    el("text", {x: PL - 8, y: y(v) + 3.5, "text-anchor": "end", class: "text"}).textContent = v;
+    el("text", {x: L.PL - 7, y: y(v) + 3.5, "text-anchor": "end", class: "text",
+                "font-size": L.police}).textContent = v;
   }
   /* mois : graduations générées automatiquement sur toute la période */
   const an0 = new Date(TMIN).getUTCFullYear(), an1 = new Date(TMAX).getUTCFullYear();
@@ -344,19 +366,22 @@ function rendreGraphe() {
     for (let mois = 0; mois < 12; mois++) {
       const tms = Date.UTC(annee, mois, 1);
       if (tms < TMIN || tms > TMAX) continue;
-      el("line", {x1: x(tms), x2: x(tms), y1: PT, y2: y(0), stroke: "#eceff3"});
-      el("text", {x: x(tms) + 4, y: H - PB + 16, class: "text"}).textContent = fmtMois(tms);
+      if (L.unMoisSurDeux && (annee * 12 + mois) % 2) continue;   /* mobile : un mois sur deux */
+      el("line", {x1: x(tms), x2: x(tms), y1: L.PT, y2: y(0), stroke: "#eceff3"});
+      el("text", {x: x(tms) + 4, y: L.H - L.PB + 15, class: "text", "font-size": L.police})
+        .textContent = L.moisAvecAnnee ? fmtMois(tms)
+        : new Date(tms).toLocaleDateString("fr-FR", {month: "short", timeZone: "UTC"});
     }
-  el("text", {x: PL - 8, y: y(0) + 22, "text-anchor": "end", class: "text"}).textContent = "%";
+  el("text", {x: L.PL - 7, y: y(0) + 20, "text-anchor": "end", class: "text",
+              "font-size": L.police}).textContent = "%";
 
   /* couches candidats : points puis courbes (les courbes au-dessus) */
-  const couches = {}, etiquettes = [];
+  const etiquettes = [];
   for (const c of CANDIDATS) {
     if (!VISIBLES.has(c.nom)) continue;
     const pts = seriesCandidat(c.nom);
     if (!pts.length) continue;
     const couleur = COULEURS[c.nom];
-    couches[c.nom] = {pts, couleur};
     const g = el("g", {});
     for (const [tms, v] of pts)
       el("circle", {cx: x(tms), cy: y(v), r: 3, fill: couleur, opacity: 0.42}, g);
@@ -371,32 +396,40 @@ function rendreGraphe() {
                        texte: court(c.nom) + "  " + fmtPct(fin[1])});
     }
   }
-  /* étiquettes en bout de courbe, avec anti-collision verticale */
+  /* étiquettes en bout de courbe : anti-collision verticale + maintien dans le cadre */
   etiquettes.sort((a, b) => a.y - b.y);
+  const ecartMin = L.police + 2.5;
   for (let i = 1; i < etiquettes.length; i++)
-    if (etiquettes[i].y - etiquettes[i - 1].y < 13)
-      etiquettes[i].y = Math.min(etiquettes[i - 1].y + 13, y(0) - 7);
+    if (etiquettes[i].y - etiquettes[i - 1].y < ecartMin)
+      etiquettes[i].y = Math.min(etiquettes[i - 1].y + ecartMin, y(0) - 7);
   for (const e of etiquettes) {
-    const txt = el("text", {x: e.x + 7, y: e.y + 3.5, fill: e.couleur,
-      "font-size": "11.5", "font-weight": "600",
+    /* la marge droite étant étroite sur mobile, on cale l'étiquette dans le cadre */
+    const largeur = e.texte.length * L.police * 0.56;
+    const ex = Math.min(e.x + 7, Math.max(L.PL + 4, L.W - 8 - largeur));
+    const txt = el("text", {x: ex, y: e.y + 3.5, fill: e.couleur,
+      "font-size": L.police, "font-weight": "600",
       stroke: "#fff", "stroke-width": "3", "stroke-linejoin": "round",
       "paint-order": "stroke"});
     txt.textContent = e.texte;
   }
-  /* couche d'interaction (tooltip) */
-  const hit = el("rect", {x: PL, y: PT, width: W - PL - PR, height: H - PT - PB, fill: "transparent"});
-  const ligne = el("line", {y1: PT, y2: y(0), stroke: "#9aa7b5", "stroke-dasharray": "3 3", visibility: "hidden"});
-  hit.addEventListener("mousemove", ev => {
+  /* couche d'interaction (tooltip) : souris et tactile via Pointer Events */
+  const hit = el("rect", {x: L.PL, y: L.PT, width: L.W - L.PL - L.PR,
+                          height: L.H - L.PT - L.PB, fill: "transparent"});
+  const ligne = el("line", {y1: L.PT, y2: y(0), stroke: "#9aa7b5",
+                             "stroke-dasharray": "3 3", visibility: "hidden"});
+  const suivre = ev => {
     const rect = svg.getBoundingClientRect();
-    const px = (ev.clientX - rect.left) * W / rect.width;
+    const px = (ev.clientX - rect.left) * L.W / rect.width;
     let plusProche = null, ecart = Infinity;
     for (const s of SONDAGES) { const e = Math.abs(x(s.t) - px); if (e < ecart) { ecart = e; plusProche = s; } }
     if (!plusProche) return;
     ligne.setAttribute("x1", x(plusProche.t)); ligne.setAttribute("x2", x(plusProche.t));
     ligne.setAttribute("visibility", "visible");
     montrerInfobulle(plusProche, ev, rect);
-  });
-  hit.addEventListener("mouseleave", () => {
+  };
+  hit.addEventListener("pointermove", suivre);
+  hit.addEventListener("pointerdown", suivre);      /* tactile : affiche au toucher */
+  hit.addEventListener("pointerleave", () => {
     ligne.setAttribute("visibility", "hidden");
     document.getElementById("tooltip").style.display = "none";
   });
@@ -414,9 +447,11 @@ function montrerInfobulle(sondage, ev, rect) {
       '</span><span><b>' + fmtPct(c.score) + "</b></span></div>").join("");
   bulle.style.display = "block";
   const wrap = bulle.parentElement.getBoundingClientRect();
-  const lx = ev.clientX - rect.left + (W / rect.width) * 14, ly = ev.clientY - rect.top;
-  bulle.style.left = Math.min(lx / (W / rect.width) + 8, wrap.width - 210) + "px";
-  bulle.style.top = Math.max(0, ly / (rect.height / H) - 20) + "px";
+  const echelleX = rect.width / LAYOUT.W, echelleY = rect.height / LAYOUT.H;
+  const sx = (ev.clientX - rect.left) / echelleX + 16;   /* position en unités SVG, décalée du doigt */
+  const sy = (ev.clientY - rect.top) / echelleY;
+  bulle.style.left = Math.max(4, Math.min(sx * echelleX, wrap.width - bulle.offsetWidth - 6)) + "px";
+  bulle.style.top = Math.max(0, Math.min(sy * echelleY - 16, wrap.height - bulle.offsetHeight - 8)) + "px";
 }
 
 function rendreLegende() {
@@ -475,10 +510,22 @@ document.querySelectorAll("#degres button").forEach(b => {
   });
 });
 
+/* adaptation au support : le graphique se redessine quand la fenêtre change
+   de taille ou quand le téléphone pivote (portrait ⇄ paysage) */
+window.addEventListener("resize", () => { miseAJourDisposition(); rendreGraphe(); });
+window.addEventListener("orientationchange", () => { miseAJourDisposition(); rendreGraphe(); });
+
+/* tactile : fermer l'infobulle en touchant hors du graphique */
+document.addEventListener("pointerdown", ev => {
+  if (!ev.target.closest || !ev.target.closest(".chartwrap"))
+    document.getElementById("tooltip").style.display = "none";
+});
+
 (async () => {
   const {data, live} = await chargerDonnees();
   DATA = data;
   normaliser(data);
+  miseAJourDisposition();
   rendreMeta(live);
   rendreLegende();
   rendreGraphe();
