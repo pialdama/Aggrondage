@@ -3,7 +3,7 @@ name: Mise à jour des sondages
 
 on:
   schedule:
-    - cron: "0 6 * * 1"   # lundi 06:00 UTC = 07h00/08h00 à Paris selon la saison
+    - cron: "0 6 * * *"   # lundi 06:00 UTC = 07h00/08h00 à Paris selon la saison
   workflow_dispatch:        # permet aussi de lancer à la main
 
 permissions:
