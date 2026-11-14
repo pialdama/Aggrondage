@@ -49,6 +49,15 @@
   .degres button:hover:not(.actif) { background: #eef1f5; }
   .chartwrap { position: relative; background: var(--card); border: 1px solid var(--line);
                border-radius: 12px; padding: 10px 8px 4px; }
+  .titre-bloc { display: flex; flex-wrap: wrap; gap: 2px 16px; align-items: baseline;
+                justify-content: space-between; margin-bottom: 4px; }
+  .titre-bloc h2 { margin: 0; font-size: 16px; }
+  .info-sondage { font-size: 13px; color: var(--muted); }
+  .info-sondage b { color: var(--ink); }
+  .slider-sondage { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+  .slider-sondage input { flex: 1; accent-color: var(--accent); }
+  .libelle-curseur { font-size: 12.5px; color: var(--muted); white-space: nowrap;
+                     font-variant-numeric: tabular-nums; }
   svg { display: block; width: 100%; height: auto; touch-action: pan-y; }
   #tooltip { position: absolute; pointer-events: none; background: #fff; border: 1px solid var(--line);
              border-radius: 10px; box-shadow: 0 8px 24px rgba(22,32,46,.14);
@@ -103,6 +112,21 @@
     <svg id="chart" viewBox="0 0 960 540" role="img"
          aria-label="Intentions de vote au premier tour de la présidentielle 2027, avec tendance LOESS"></svg>
     <div id="tooltip"></div>
+  </section>
+
+  <section class="panel">
+    <div class="titre-bloc">
+      <h2>Un sondage en détail</h2>
+      <div id="info-sondage" class="info-sondage"></div>
+    </div>
+    <svg id="moustaches" viewBox="0 0 960 400" role="img"
+         aria-label="Intervalles de confiance à 95 % des intentions de vote du sondage sélectionné"></svg>
+    <div class="slider-sondage">
+      <input type="range" id="curseur" min="0" max="0" step="1" value="0"
+             aria-label="Choix du sondage, du plus récent au plus ancien">
+      <span id="curseur-libelle" class="libelle-curseur"></span>
+    </div>
+    <p class="note" style="margin:8px 0 0;">Intervalle de confiance à 95&#8239;% calculé par l'approximation normale ±&#8239;1,96·√(p(1−p)/n). La plupart des instituts utilisant la méthode des quotas, cet intervalle n'a pas de justification mathématique stricte&#8239;: à lire comme un ordre de grandeur (±&#8239;1 à 3 points selon la taille de l'échantillon).</p>
   </section>
 
   <p class="note">
@@ -518,6 +542,72 @@ function rendreMeta(live) {
   ].join("");
 }
 
+/* ---------------- bloc « un sondage en détail » (moustaches) ---------------- */
+const svgM = document.getElementById("moustaches");
+let INDEX_SONDAGE = 0;
+
+/* Intervalle de confiance à 95 % d'une proportion, en points :
+   ± 1,96·√(p(1−p)/n) avec p en % (d'où p(100−p)/n). */
+function intervalle(p, n) { return n ? 1.96 * Math.sqrt(p * (100 - p) / n) : null; }
+
+function rendreMoustaches() {
+  if (!SONDAGES.length || !LAYOUT) return;
+  const mobile = LAYOUT.W < 700;
+  const s = SONDAGES[SONDAGES.length - 1 - INDEX_SONDAGE];   /* curseur : 0 = plus récent */
+  const cands = s.scores.slice().sort((a, b) => b.score - a.score);
+  const W = mobile ? 480 : 960, hLigne = mobile ? 24 : 26;
+  const PL = mobile ? 102 : 132, PR = mobile ? 10 : 64, PT = 8, PB = 24;
+  const H = PT + PB + cands.length * hLigne;
+  const police = mobile ? 10 : 11.5;
+  svgM.setAttribute("viewBox", "0 0 " + W + " " + H);
+  svgM.innerHTML = "";
+  const xm = v => PL + v / YMAX * (W - PL - PR);
+
+  /* grille verticale + axe des % */
+  for (let v = 0; v <= YMAX; v += mobile ? 10 : 5) {
+    el("line", {x1: xm(v), x2: xm(v), y1: PT, y2: H - PB, stroke: "#eceff3"}, svgM);
+    el("text", {x: xm(v), y: H - PB + 14, "text-anchor": "middle", class: "text",
+                "font-size": police}, svgM).textContent = v;
+  }
+  el("text", {x: W - 4, y: H - PB + 14, "text-anchor": "end", class: "text",
+              "font-size": police}, svgM).textContent = "%";
+
+  /* une rangée par candidat : point = score publié, moustache = IC à 95 % */
+  cands.forEach((c, i) => {
+    const yc = PT + i * hLigne + hLigne / 2;
+    const couleur = COULEURS[c.nom];
+    el("text", {x: PL - 8, y: yc + 3.5, "text-anchor": "end", class: "text",
+                "font-size": police}, svgM).textContent = court(c.nom);
+    const m = intervalle(c.score, s.n);
+    if (m !== null) {
+      const gauche = Math.max(0, Math.min(YMAX, c.score - m));
+      const droite = Math.min(YMAX, c.score + m);
+      el("line", {x1: xm(gauche), x2: xm(droite), y1: yc, y2: yc,
+                  stroke: couleur, "stroke-width": 1.6}, svgM);
+      el("line", {x1: xm(gauche), x2: xm(gauche), y1: yc - 4, y2: yc + 4,
+                  stroke: couleur, "stroke-width": 1.6}, svgM);
+      el("line", {x1: xm(droite), x2: xm(droite), y1: yc - 4, y2: yc + 4,
+                  stroke: couleur, "stroke-width": 1.6}, svgM);
+      const libelle = fmtPct(c.score) + (mobile ? "" :
+        " ± " + m.toLocaleString("fr-FR", {minimumFractionDigits: 1, maximumFractionDigits: 1}));
+      el("text", {x: Math.min(xm(droite) + 6, W - (mobile ? 36 : 74)), y: yc + 3.5,
+                  class: "text", "font-size": police - 0.5}, svgM).textContent = libelle;
+    } else {
+      el("text", {x: xm(c.score) + 6, y: yc + 3.5, class: "text",
+                  "font-size": police - 0.5}, svgM)
+        .textContent = fmtPct(c.score) + " (n ?)";
+    }
+    el("circle", {cx: xm(c.score), cy: yc, r: 4, fill: couleur}, svgM);
+  });
+
+  /* en-tête du bloc et libellé du curseur */
+  document.getElementById("info-sondage").innerHTML =
+    "<b>" + s.institut + "</b> · " + fmtDate(s.date) +
+    (s.n ? " · n = " + s.n.toLocaleString("fr-FR") : "");
+  document.getElementById("curseur-libelle").textContent =
+    "Sondage " + (INDEX_SONDAGE + 1) + " / " + SONDAGES.length;
+}
+
 document.getElementById("bw").addEventListener("input", ev => {
   FENETRE = +ev.target.value;
   document.getElementById("bwv").textContent = Math.round(FENETRE * 100) + " %";
@@ -537,10 +627,15 @@ document.getElementById("pondere").addEventListener("change", ev => {
   rendreGraphe(); rendreLegende();
 });
 
+document.getElementById("curseur").addEventListener("input", ev => {
+  INDEX_SONDAGE = +ev.target.value;
+  rendreMoustaches();
+});
+
 /* adaptation au support : le graphique se redessine quand la fenêtre change
    de taille ou quand le téléphone pivote (portrait ⇄ paysage) */
-window.addEventListener("resize", () => { miseAJourDisposition(); rendreGraphe(); });
-window.addEventListener("orientationchange", () => { miseAJourDisposition(); rendreGraphe(); });
+window.addEventListener("resize", () => { miseAJourDisposition(); rendreGraphe(); rendreMoustaches(); });
+window.addEventListener("orientationchange", () => { miseAJourDisposition(); rendreGraphe(); rendreMoustaches(); });
 
 /* tactile : fermer l'infobulle en touchant hors du graphique */
 document.addEventListener("pointerdown", ev => {
@@ -556,6 +651,12 @@ document.addEventListener("pointerdown", ev => {
   rendreMeta(live);
   rendreLegende();
   rendreGraphe();
+  /* curseur du bloc détail : 0 = sondage le plus récent */
+  const curseur = document.getElementById("curseur");
+  curseur.max = SONDAGES.length - 1;
+  curseur.value = 0;
+  INDEX_SONDAGE = 0;
+  rendreMoustaches();
 })();
 </script>
 </body>
