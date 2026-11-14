@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Aggrondage 2027</title>
+<title>Présidentielle 2027 — tous les sondages</title>
 <style>
   :root {
     --bg: #f7f8fa; --card: #ffffff; --ink: #16202e; --muted: #5b6b7f;
@@ -82,10 +82,10 @@
 </head>
 <body>
 <header>
-  <h1>Aggrondage - L'agrégateur de sondages de l'élection présidentielle 2027</h1>
+  <h1>Présidentielle 2027 — tous les sondages</h1>
   <p class="sous">Premier tour · intentions de vote publiées, agrégées et lissées par régression locale (LOESS)</p>
   <div class="meta" id="meta"></div>
-  <p class="source">Source des données : <a href="https://sondax.fr" target="_blank" rel="noopener">Sondax</a>, d'après la page Wikipédia «&#8239;Liste de sondages sur l'élection présidentielle française de 2027&#8239;» — licence CC&nbsp;BY-SA&nbsp;4.0. Mise à jour quotidienne par <code>sondages_2027.py</code>.</p>
+  <p class="source">Source des données : <a href="https://sondax.fr" target="_blank" rel="noopener">Sondax</a>, d'après la page Wikipédia «&#8239;Liste de sondages sur l'élection présidentielle française de 2027&#8239;» — licence CC&nbsp;BY-SA&nbsp;4.0. Mise à jour hebdomadaire par <code>sondages_2027.py</code>.</p>
 </header>
 
 <main>
@@ -116,7 +116,7 @@
 
   <section class="panel">
     <div class="titre-bloc">
-      <h2>Les sondages en détail</h2>
+      <h2>Un sondage en détail</h2>
       <div id="info-sondage" class="info-sondage"></div>
     </div>
     <svg id="moustaches" viewBox="0 0 960 400" role="img"
@@ -130,7 +130,35 @@
   </section>
 
   <p class="note">
-    Chaque point est le score publié dans l'<b>hypothèse principale</b> d'un sondage (1<sup>er</sup>&#8239;tour) ; les listes de candidats testées varient d'un sondage à l'autre, un candidat non testé n'a pas de point à cette date. Les courbes épaisses sont des <b>tendances LOESS</b> (régression locale pondérée) calculées sur les sondages où le candidat est testé — ajustez la fenêtre et le <b>degré du polynôme local</b> (0&#8239;: moyenne pondérée, 1&#8239;: linéaire, 2&#8239;: quadratique) pour plus ou moins de lissage. Les sondages sont <b>pondérés par la taille de leur échantillon</b> : la variance d'un pourcentage estimé variant en 1/n, les grands échantillons pèsent proportionnellement davantage (le baromètre Ipsos à 13&#8239;060 répondants compte environ 9 fois plus qu'un sondage à 1&#8239;500). Le score affiché en bout de courbe est la <b>valeur lissée au dernier sondage</b> où le candidat a été testé. Jusqu'en juin 2026, les instituts testaient <b>Jordan Bardella</b> comme candidat du RN&#8239;; <b>Marine Le Pen</b> l'a remplacé dans les hypothèses à partir de juillet.
+    Chaque point est le score publié dans l'<b>hypothèse principale</b> d'un sondage (1<sup>er</sup>&#8239;tour) ; les listes de candidats testées varient d'un sondage à l'autre, un candidat non testé n'a pas de point à cette date.
+  </p>
+
+  <p class="note">
+    <b>Qu'est-ce que le lissage LOESS&#8239;?</b> Les points bruts bougent beaucoup d'un sondage à l'autre (échantillons différents, marges d'erreur de ±&#8239;1 à 3 points), ce qui rend les tendances difficiles à lire.
+  </p>
+
+  <p class="note">
+    Le LOESS (<i>locally estimated scatterplot smoothing</i>, ou régression locale pondérée) trace une courbe de tendance en répétant une opération très simple&#8239;: pour chaque date, on regarde uniquement les sondages situés dans une fenêtre autour de cette date, on donne à chacun un poids qui décroît à mesure qu'il s'en éloigne dans le temps (et selon la taille de son échantillon), puis on calcule la moyenne ou la droite qui passe « au mieux » au milieu de ces points pondérés.
+  </p>
+
+  <p class="note">
+    En glissant cette fenêtre le long du temps, on obtient une courbe souple qui suit la tendance de fond en éliminant les à-coups dus aux fluctuations d'échantillonnage. C'est un peu la version statistique d'une moyenne glissante, mais plus fine&#8239;: au lieu de moyenner brutalement, elle ajuste une petite équation localement, ce qui restitue mieux les virages de la tendance.
+  </p>
+
+  <p class="note">
+    <b>Les deux paramètres à votre disposition</b> contrôlent le compromis entre fidélité aux données et lissage.
+  </p>
+
+  <p class="note">
+    La <b>fenêtre</b> (de 20&#8239;% à 80&#8239;% des sondages) fixe la largeur de la zone prise en compte à chaque date&#8239;: courte, la courbe colle aux sondages et reste nerveuse&#8239;; longue, elle ne garde que la tendance de très long terme et peut « rater » un retournement récent.
+  </p>
+
+  <p class="note">
+    Le <b>degré du polynôme local</b> fixe la forme ajustée dans chaque fenêtre&#8239;: 0 pour une simple moyenne pondérée (le plus lisse), 1 pour une droite (compromis habituel), 2 pour une parabole (plus réactif aux courbures, mais plus instable quand les points sont rares ou épars).
+  </p>
+
+  <p class="note">
+    En pratique, une fenêtre moyenne et un degré 1 ou 2 donnent une lecture équilibrée&#8239;: testez les réglages pour sentir comment la courbe réagit. Les sondages sont <b>pondérés par la taille de leur échantillon</b> : la variance d'un pourcentage estimé variant en 1/n, les grands échantillons pèsent proportionnellement davantage (le baromètre Ipsos à 13&#8239;060 répondants compte environ 9 fois plus qu'un sondage à 1&#8239;500). Le score affiché en bout de courbe est la <b>valeur lissée au dernier sondage</b> où le candidat a été testé. Jusqu'en juin 2026, les instituts testaient <b>Jordan Bardella</b> comme candidat du RN&#8239;; <b>Marine Le Pen</b> l'a remplacé dans les hypothèses à partir de juillet.
   </p>
 </main>
 
