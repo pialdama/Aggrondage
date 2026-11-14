@@ -18,8 +18,8 @@ Utilisation
     python3 sondages_2027.py --inject    # réinjecte aussi les données dans index.html
                                          # (la page reste alors consultable en file://)
 
-Planification hebdomadaire avec cron (lundi à 06:00) :
-    0 6 * * 1  /usr/bin/python3 /chemin/vers/sondages_2027.py
+Planification quotidienne avec cron (06:00) :
+    0 6 * * *  /usr/bin/python3 /chemin/vers/sondages_2027.py
 
 Ou avec un timer systemd (`sondages-2027.timer`, OnCalendar=Mon *-*-* 06:00:00)
 lançant un service `ExecStart=/usr/bin/python3 /chemin/vers/sondages_2027.py`.
