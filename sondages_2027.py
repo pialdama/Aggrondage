@@ -6,9 +6,9 @@ Agrégateur de sondages — élection présidentielle française 2027
 
 Télécharge le CSV consolidant tous les sondages publiés (Sondax, d'après la
 page Wikipédia « Liste de sondages sur l'élection présidentielle française de
-2027 »), en extrait les intentions de vote du premier tour (hypothèse
-principale de chaque sondage) et publie le résultat dans `data.json`,
-consommé par la page `index.html`.
+2027 »), en extrait les intentions de vote du premier tour (toutes les
+hypothèses testées, la principale et les variantes) et publie le résultat dans
+`data.json`, consommé par la page `index.html`.
 
 Utilisation
 -----------
@@ -18,8 +18,8 @@ Utilisation
     python3 sondages_2027.py --inject    # réinjecte aussi les données dans index.html
                                          # (la page reste alors consultable en file://)
 
-Planification quotidienne avec cron (06:00) :
-    0 6 * * *  /usr/bin/python3 /chemin/vers/sondages_2027.py
+Planification hebdomadaire avec cron (lundi à 06:00) :
+    0 6 * * 1  /usr/bin/python3 /chemin/vers/sondages_2027.py
 
 Ou avec un timer systemd (`sondages-2027.timer`, OnCalendar=Mon *-*-* 06:00:00)
 lançant un service `ExecStart=/usr/bin/python3 /chemin/vers/sondages_2027.py`.
@@ -105,36 +105,48 @@ def download_csv() -> str:
 # ------------------------------------------------------------------ analyse du CSV
 
 def parse_polls(csv_text: str) -> list[dict]:
-    """Extrait les scores du premier tour, hypothèse principale de chaque sondage.
+    """Extrait les scores du premier tour, toutes hypothèses testées.
 
-    Le CSV contient une ligne par (sondage, configuration, candidat) ; on ne
-    garde que la configuration principale (`configuration_principale == 1`)
-    du premier tour, retenue par Sondax comme l'hypothèse la plus complète.
+    Le CSV contient une ligne par (sondage, configuration, candidat) ; une
+    même vague de sondage peut proposer plusieurs configurations au premier
+    tour (listes de candidats différentes). On conserve chacune comme une
+    entrée distincte, avec sa configuration et son drapeau « principale ».
     """
     reader = csv.DictReader(io.StringIO(csv_text))
-    polls: dict[str, dict] = {}
+    polls: dict[tuple[str, str], dict] = {}
 
     for row in reader:
-        if row.get("tour") != "1" or row.get("configuration_principale") != "1":
+        if row.get("tour") != "1":
             continue
 
         poll_id = row["sondage_id"]
+        config = (row.get("configuration") or "1").strip() or "1"
+        key = (poll_id, config)
+        n = _to_int(row.get("echantillon_configuration")) or _to_int(row.get("echantillon"))
         poll = polls.setdefault(
-            poll_id,
+            key,
             {
                 "id": poll_id,
                 "institut": row["institut"],
                 "date": row["terrain_fin"],          # fin de terrain (AAAA-MM-JJ)
-                "n": _to_int(row.get("echantillon")),
+                "n": n,
+                "configuration": int(config) if config.isdigit() else config,
+                "principale": row.get("configuration_principale") == "1",
                 "scores": [],                        # [candidat, parti, score]
             },
         )
 
         score = _to_float(row.get("score"))
-        if score is not None:
+        if score is None:
+            continue
+        if not [s for s in poll["scores"] if s[0] == row["candidat"]]:
             poll["scores"].append([row["candidat"], row.get("parti") or "", score])
 
-    result = sorted(polls.values(), key=lambda p: p["date"], reverse=True)
+    result = sorted(
+        polls.values(),
+        key=lambda p: (p["date"], str(p["configuration"])),
+        reverse=True,
+    )
     for poll in result:
         poll["scores"].sort(key=lambda s: -s[2])
     return result
