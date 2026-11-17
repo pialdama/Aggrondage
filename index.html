@@ -66,6 +66,8 @@
   #tooltip h3 { margin: 0 0 6px; font-size: 12.5px; color: var(--muted); font-weight: 600; }
   #tooltip .row { display: flex; justify-content: space-between; gap: 14px; padding: 1px 0; }
   #tooltip .row span:last-child { font-variant-numeric: tabular-nums; }
+  #tooltip h4 { margin: 6px 0 3px; font-size: 12px; color: var(--ink); font-weight: 600; }
+  #tooltip .sep { border-top: 1px solid var(--line); margin: 6px 0; }
   .note { font-size: 12.5px; color: var(--muted); line-height: 1.55; margin: 0 0 20px; }
   footer { padding-bottom: 34px; font-size: 12px; color: var(--muted); line-height: 1.6; }
   footer a { color: var(--accent); }
@@ -130,7 +132,7 @@
   </section>
 
   <p class="note">
-    Chaque point est le score publié dans l'<b>hypothèse principale</b> d'un sondage (1<sup>er</sup>&#8239;tour) ; les listes de candidats testées varient d'un sondage à l'autre, un candidat non testé n'a pas de point à cette date.
+    Chaque point est un score publié au 1<sup>er</sup>&#8239;tour, <b>toutes les hypothèses testées confondues</b>&#8239;: quand un institut publie plusieurs listes de candidats pour un même sondage (l'hypothèse principale et ses variantes, par exemple avec ou sans tel candidat), chaque hypothèse apparaît comme un point distinct et l'infobulle les détaille, la principale d'abord. Un candidat non testé dans une hypothèse n'a pas de point pour celle-ci. Dans le bloc du bas, le curseur parcourt chaque hypothèse l'une après l'autre.
   </p>
 
   <p class="note">
@@ -356,6 +358,10 @@ async function chargerDonnees() {
 function normaliser(donnees) {
   SONDAGES = donnees.polls
     .map(p => ({...p, t: t(p.date),
+                /* compatibilité anciens jeux de données : une entrée sans champ
+                   « configuration » est l'hypothèse principale unique */
+                configuration: p.configuration ?? 1,
+                principale: p.principale ?? true,
                 scores: p.scores.map(s => s.length === 3
                   ? {nom: s[0], parti: s[1], score: s[2]}
                   : {nom: s[0], parti: PARTI[s[0]] || "", score: s[1]})}))
@@ -499,7 +505,10 @@ function rendreGraphe() {
     if (!plusProche) return;
     ligne.setAttribute("x1", x(plusProche.t)); ligne.setAttribute("x2", x(plusProche.t));
     ligne.setAttribute("visibility", "visible");
-    montrerInfobulle(plusProche, ev, rect);
+    /* à cette date, montrer toutes les hypothèses testées (principale d'abord) */
+    const memes = SONDAGES.filter(s => s.t === plusProche.t)
+      .sort((a, b) => (b.principale - a.principale) || (a.configuration - b.configuration));
+    montrerInfobulle(memes, ev, rect);
   };
   hit.addEventListener("pointermove", suivre);
   hit.addEventListener("pointerdown", suivre);      /* tactile : affiche au toucher */
@@ -509,16 +518,23 @@ function rendreGraphe() {
   });
 }
 
-function montrerInfobulle(sondage, ev, rect) {
+function montrerInfobulle(sondages, ev, rect) {
   const bulle = document.getElementById("tooltip");
-  const rows = CANDIDATS.filter(c => VISIBLES.has(c.nom))
-    .map(c => ({...c, score: (sondage.scores.find(s => s.nom === c.nom) || {}).score}))
-    .filter(c => c.score !== undefined);
-  bulle.innerHTML = "<h3>" + sondage.institut + " · " + fmtDate(sondage.date) +
-    (sondage.n ? " · n = " + sondage.n.toLocaleString("fr-FR") : "") + "</h3>" +
-    rows.map(c => '<div class="row"><span><span class="dot" style="display:inline-block;background:' +
+  const visibles = CANDIDATS.filter(c => VISIBLES.has(c.nom));
+  const bloc = s => {
+    const rows = visibles
+      .map(c => ({...c, score: (s.scores.find(s0 => s0.nom === c.nom) || {}).score}))
+      .filter(c => c.score !== undefined);
+    const titre = "<h4>" + (s.principale ? "Hypothèse principale"
+      : "Hypothèse " + s.configuration) +
+      (s.n ? " · n = " + s.n.toLocaleString("fr-FR") : "") + "</h4>";
+    return titre + rows.map(c => '<div class="row"><span><span class="dot" style="display:inline-block;background:' +
       (COULEURS[c.nom] || "#888") + '"></span> ' + c.nom +
       '</span><span><b>' + fmtPct(c.score) + "</b></span></div>").join("");
+  };
+  bulle.innerHTML =
+    "<h3>" + sondages[0].institut + " · " + fmtDate(sondages[0].date) + "</h3>" +
+    sondages.map(bloc).join('<div class="sep"></div>');
   bulle.style.display = "block";
   const wrap = bulle.parentElement.getBoundingClientRect();
   const echelleX = rect.width / LAYOUT.W, echelleY = rect.height / LAYOUT.H;
@@ -560,8 +576,12 @@ function rendreLegende() {
 
 function rendreMeta(live) {
   const instituts = new Set(SONDAGES.map(s => s.institut));
+  const sondages = new Set(SONDAGES.map(s => s.id));
+  const variantes = SONDAGES.length - sondages.size;
   document.getElementById("meta").innerHTML = [
-    "<span class='chip'><b>" + SONDAGES.length + "</b> sondages</span>",
+    "<span class='chip'><b>" + sondages.size + "</b> sondages</span>",
+    "<span class='chip'><b>" + SONDAGES.length + "</b> hypothèses testées" +
+      (variantes ? " (dont <b>" + variantes + "</b> variantes)" : "") + "</span>",
     "<span class='chip'>du <b>" + SONDAGES[0].date.split("-").reverse().join("/") + "</b> au <b>" +
       SONDAGES[SONDAGES.length - 1].date.split("-").reverse().join("/") + "</b></span>",
     "<span class='chip'><b>" + instituts.size + "</b> instituts</span>",
@@ -631,9 +651,11 @@ function rendreMoustaches() {
   /* en-tête du bloc et libellé du curseur */
   document.getElementById("info-sondage").innerHTML =
     "<b>" + s.institut + "</b> · " + fmtDate(s.date) +
-    (s.n ? " · n = " + s.n.toLocaleString("fr-FR") : "");
+    (s.n ? " · n = " + s.n.toLocaleString("fr-FR") : "") +
+    " · " + (s.principale ? "<b>hypothèse principale</b>"
+             : "hypothèse " + s.configuration + " (variante)");
   document.getElementById("curseur-libelle").textContent =
-    "Sondage " + (INDEX_SONDAGE + 1) + " / " + SONDAGES.length;
+    "Hypothèse " + (INDEX_SONDAGE + 1) + " / " + SONDAGES.length;
 }
 
 document.getElementById("bw").addEventListener("input", ev => {
